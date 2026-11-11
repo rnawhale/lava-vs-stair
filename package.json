@@ -1,0 +1,12 @@
+{
+  "name": "lava-vs-stair",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Lava VS Stair — 브라우저에서 바로 하는 3D 아케이드 파티 게임",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node tools/check.mjs",
+    "sim": "node tools/sim.mjs"
+  }
+}
