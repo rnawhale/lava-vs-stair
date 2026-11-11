@@ -20,7 +20,8 @@ await pilot(page, { level, maxMs: 300000, until: async (r) => {
 } });
 await sleep(4000);
 const s = await state(page);
-console.log('marks', JSON.stringify(marks), 'me', JSON.stringify(s.me), 'scores', s.scores);
+const times = await page.evaluate(() => window.__lvs.me.stageTimes);
+console.log('marks', JSON.stringify(marks), 'stageTimes', JSON.stringify(times), 'me', JSON.stringify(s.me), 'scores', s.scores);
 await ctx.close(); await browser.close();
 const f = readdirSync(DIR).find((x) => x.endsWith('.webm'));
 renameSync(`${DIR}/${f}`, `${DIR}/match.webm`);
