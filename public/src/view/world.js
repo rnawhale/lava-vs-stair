@@ -128,7 +128,7 @@ const bandTextures = (() => {
 function towerTextures() {
   const S = 1024, rows = 8, cols = 4, bh = S / rows, bw = S / cols;
   const bricks = [];
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) bricks.push({ x: c * bw + (r % 2 ? bw / 2 : 0), y: r * bh, tone: 16 + rnd() * 16, crack: rnd() < 0.2 });
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) bricks.push({ x: c * bw + (r % 2 ? bw / 2 : 0), y: r * bh, tone: 30 + rnd() * 26, crack: rnd() < 0.2 });
   const crackPaths = bricks.filter(b => b.crack).map(b => {
     const pts = [[b.x + bw * (0.15 + rnd() * 0.2), b.y + bh * (0.2 + rnd() * 0.6)]];
     for (let i = 0; i < 5; i++) pts.push([pts[i][0] + bw * (0.08 + rnd() * 0.1), pts[i][1] + bh * (rnd() - 0.5) * 0.35]);
@@ -147,7 +147,7 @@ function towerTextures() {
     each(g, (b, x, y) => {
       const t = b.tone;
       const grad = g.createLinearGradient(0, y, 0, y + bh);
-      grad.addColorStop(0, `rgb(${t + 16},${t + 12},${t + 22})`); grad.addColorStop(1, `rgb(${t},${t - 2},${t + 6})`);
+      grad.addColorStop(0, `rgb(${t + 18},${t + 12},${t + 30})`); grad.addColorStop(1, `rgb(${t},${t - 4},${t + 12})`);
       g.fillStyle = grad; g.fillRect(x + 5, y + 5, bw - 10, bh - 10);
       g.fillStyle = 'rgba(255,255,255,0.05)'; g.fillRect(x + 5, y + 5, bw - 10, 5);
       for (let i = 0; i < 26; i++) { g.fillStyle = `rgba(0,0,0,${rnd() * 0.25})`; g.fillRect(x + 8 + rnd() * (bw - 20), y + 8 + rnd() * (bh - 20), 2 + rnd() * 9, 2 + rnd() * 6); }
@@ -390,8 +390,8 @@ export function buildWorld(scene, course) {
   scene.add(sky, makeMountains(), lava);
 
   // 조명: 차가운 달빛 + 용암의 붉은 반사광
-  scene.add(new THREE.HemisphereLight(0x8fa3ff, 0xff5a1c, 1.25));
-  const moon = new THREE.DirectionalLight(0xcfe0ff, 2.3);
+  scene.add(new THREE.HemisphereLight(0x9fb0ff, 0xff5a1c, 1.6));
+  const moon = new THREE.DirectionalLight(0xd6e4ff, 2.8);
   moon.castShadow = true;
   moon.shadow.mapSize.set(2048, 2048);
   Object.assign(moon.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 10, far: 420 });

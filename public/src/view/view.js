@@ -171,8 +171,8 @@ export class View {
         else if (y < c.focusY - 4) ly = lerp(ahead.y, y + 3, 0.6);   // 떨어질 때는 아래를 내려다본다
         kT = 7;
       } else {
-        tth = th; tr = r + 20; ty = y + 13;
-        const look = toWorld(th, RP, y + 8);
+        tth = th; tr = r + 23; ty = y + 15;
+        const look = toWorld(th, RP, y + 6.5);
         lx = look.x; ly = look.y; lz = look.z;
         kT = 12; kR = 8; kY = 8;
       }
@@ -203,9 +203,10 @@ export class View {
     this.fx.update(dt, this.camera);
     // 그림자 영역을 주인공 주변으로
     const f = local ? this.views.get(local.id).pos : this.v.set(0, 30, 0);
-    const moon = this.world.moon;
+    // 달빛은 카메라 오른쪽 뒤 위에서: 탑을 돌아 올라가도 보이는 면이 늘 밝다
+    const moon = this.world.moon, lp = toWorld(this.cam.th + 0.55, this.cam.r + 120, f.y + 170);
     moon.target.position.copy(f);
-    moon.position.set(f.x + 90, f.y + 150, f.z + 60);
+    moon.position.set(lp.x, lp.y, lp.z);
     if (this.quality === 'high') this.composer.render(dt);
     else this.renderer.render(this.scene, this.camera);
   }

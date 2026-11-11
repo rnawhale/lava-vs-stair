@@ -19,7 +19,7 @@ const coarse = matchMedia('(pointer: coarse)').matches;
 let sim = null, me = null;
 let mode = 'title';          // 'title'(배경 시연) | 'match'
 let paused = false, earned = 0, bestNew = null, acc = 0, last = performance.now();
-let attractT = 0, slow = 0;
+let attractT = 0, slow = 0, speed = 1;   // speed: 검증 도구가 경기를 빨리 돌릴 때만 바꾼다
 
 const applyQuality = () => view.setQuality(save.settings.quality === 'auto' ? (coarse ? 'low' : 'high') : save.settings.quality);
 applyQuality();
@@ -208,7 +208,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (!paused) {
-    acc += dt;
+    acc += dt * speed;
     let n = 0;
     while (acc >= STEP && n++ < 24) { tick(); acc -= STEP; }
     if (acc > STEP) acc = 0;
@@ -254,6 +254,6 @@ function advise(level = 5) {
   const want = tb.th + 0.2 - me.body.th;
   return { role: 'shoot', fwd: Math.abs(want) * me.body.r > 3 ? Math.sign(want) : 0, out: 0, x: s.x, y: s.y, fire: sim.phase === 'leg' && s.visible && !best.safe && best.protectT <= 0 && dist < me.gun.range * 0.95 };
 }
-window.__lvs = { get sim() { return sim; }, get me() { return me; }, get paused() { return paused; }, view, ui, input, save, sfx, CFG, startSolo, startAttract, advise, persist: () => persist(save) };
+window.__lvs = { get sim() { return sim; }, get me() { return me; }, get paused() { return paused; }, set speed(v) { speed = v; }, view, ui, input, save, sfx, CFG, startSolo, startAttract, advise, persist: () => persist(save) };
 startAttract();
 requestAnimationFrame(frame);
