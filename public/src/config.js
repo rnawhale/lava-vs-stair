@@ -68,6 +68,7 @@ export const CFG = {
   respawnProtect: 2,
   hitImmunity: 0.75,
   knockDuration: 0.3,      // 밀치기 동안 조작 불가(비틀거림)
+  knockFriction: 50,       // 땅에서 밀릴 때의 감속(stud/s²). 공중에서는 감속 없음
   time: { countdown: 5, leg: 120, switch: 10 },
 
   // ── 물총 ────────────────────────────────────────────────

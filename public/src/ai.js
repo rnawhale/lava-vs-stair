@@ -32,6 +32,7 @@ function chainOK(route, i, tArr, depth = 0) {
 /** 곧 내 쪽으로 지나갈 물줄기가 있는가. 실력(L.dodge)에 따라 물줄기마다 "봤다/못 봤다"가 한 번 정해진다. */
 function incoming(a, sim) {
   const ai = a.ai, b = a.body, w = toWorld(b.th, b.r, b.y + 2.4);
+  if (a.immuneT > 0.45 || sim.time < (ai.braveUntil || 0)) return false;   // 맞은 직후(면역)이거나 너무 오래 참았으면 그냥 뛴다
   ai.seen = ai.seen || {};
   for (const s of sim.shots) {
     if (!s.alive) continue;
@@ -92,7 +93,11 @@ export function climbAI(a, sim, dt) {
       if ((ai.react -= dt) > 0) { walkTo(waitAt); return inp; }
       ai.committed = true; ai.react = undefined;
     } else if (!go && toTakeoff > 0.5) { ai.committed = false; return inp; }  // 창이 닫혔다: 멈춤
-    if (incoming(a, sim)) { ai.committed = false; walkTo(waitAt); return inp; }
+    if (incoming(a, sim)) {
+      ai.held = (ai.held || 0) + dt;
+      if (ai.held > 1.1) { ai.held = 0; ai.braveUntil = sim.time + 1.6; }
+      ai.committed = false; walkTo(waitAt); return inp;
+    }
     inp.fwd = 1;
     if (toTakeoff <= 0) leap(1);
     return inp;

@@ -156,7 +156,8 @@ export class UI {
     let html;
     if (me.role === 'climb') {
       const st = Math.min(3, me.stageDone + 1), g = me.body.ground;
-      const stepNo = me.finished ? CFG.stages[2].steps : g && g.kind === 'step' && g.stage === st ? g.index : 0;
+      if (g) this._step = g.kind === 'step' && g.stage === st ? g.index : 0;      // 점프 중에는 마지막으로 디딘 계단 유지
+      const stepNo = me.finished ? CFG.stages[2].steps : this._step || 0;
       const n = CFG.stages[st - 1].steps;
       html = me.finished ? '<b>완주!</b><span>도착 지점에서 대기</span>'
         : `<b>S${st}</b><span class="pips">${Array.from({ length: n }, (_, i) => `<i class="${i < stepNo ? 'on' : ''}"></i>`).join('')}</span><span>${stepNo}/${n}</span>`;
@@ -345,11 +346,13 @@ export class UI {
       <header><h2>설정</h2><button class="x" aria-label="닫기">✕</button></header>
       <label class="row">음량 <input type="range" class="vol" min="0" max="100" value="${Math.round(s.volume * 100)}"><span class="volv">${Math.round(s.volume * 100)}</span></label>
       <label class="row">음소거 <input type="checkbox" class="mutec" ${s.muted ? 'checked' : ''}></label>
+      <label class="row">배경 음악 <input type="checkbox" class="musicc" ${s.music ? 'checked' : ''}></label>
       <div class="row">화질 <span class="seg">${['auto', 'high', 'low'].map(q => `<button data-q="${q}" class="${s.quality === q ? 'on' : ''}">${{ auto: '자동', high: '높음', low: '낮음' }[q]}</button>`).join('')}</span></div>`, !fromPause);
     const back = () => (fromPause ? this.openPause() : this.closePanel());
     $('.x', this.sheet).onclick = back;
     $('.vol', this.sheet).oninput = (e) => { this.h.volume(e.target.value / 100); $('.volv', this.sheet).textContent = e.target.value; };
     $('.mutec', this.sheet).onchange = () => { this.h.mute(); this.syncSound(); };
+    $('.musicc', this.sheet).onchange = (e) => this.h.music(e.target.checked);
     for (const b of this.sheet.querySelectorAll('.seg button')) b.onclick = () => {
       this.h.quality(b.dataset.q);
       for (const o of this.sheet.querySelectorAll('.seg button')) o.classList.toggle('on', o === b);

@@ -7,7 +7,7 @@ export function makeBody(th, r, y) {
     th, r, y, vt: 0, vr: 0, vy: 0,
     pth: th, pr: r, py: y,          // 이전 틱 위치(렌더 보간용)
     ground: null, coyote: 0, buffer: 0, airT: 0,
-    kbT: 0, kbVt: 0, kbVr: 0, kb0: 0, // 밀치기 채널: 조작 속도와 따로 더한다
+    kbT: 0, kbVt: 0, kbVr: 0,       // 밀치기 채널: 조작 속도와 따로 더한다
   };
 }
 
@@ -43,12 +43,13 @@ export function stepClimber(b, inp, course, dt, emit) {
   const g = M.gravity * (b.vy > 0 && !inp.hold ? M.jumpCutGravity : 1);
   b.vy = Math.max(b.vy - g * dt, -M.terminal);
 
-  // 밀치기: 공중에서는 knockDuration 동안 그대로 날아가고, 땅에서는 마찰로 금방 멎는다.
-  // → 발을 붙이고 있으면 한 발은 버티지만, 점프 중에 맞으면 크게 밀린다(쏘는 쪽은 점프 순간을 노린다).
+  // 밀치기: 공중에서는 knockDuration 동안 그대로 날아가고, 땅에서는 일정한 마찰로 미끄러지다 멎는다.
+  // → 땅에서: 속사(8)는 0.6, 기본(15)은 2.3, 대포(24)는 5.5 stud쯤 밀린다. 공중에서: 2.9 / 5.4 / 8.6 stud.
+  //   발을 붙이면 버틸 만하고 점프 중에 맞으면 크게 날아간다(쏘는 쪽은 점프 순간을 노린다).
   if (b.kbT > 0) {
     b.kbT -= dt;
     if (b.ground) {
-      const m = Math.hypot(b.kbVt, b.kbVr), k = Math.max(0, m - (b.kb0 / CFG.knockDuration) * dt) / (m || 1);
+      const m = Math.hypot(b.kbVt, b.kbVr), k = Math.max(0, m - CFG.knockFriction * dt) / (m || 1);
       b.kbVt *= k; b.kbVr *= k;
     }
   } else if (b.kbVt || b.kbVr) {
@@ -127,5 +128,5 @@ export function stepLaneWalker(b, inp, course, dt) {
 
 /** 수평 밀치기. (dirT, dirR)는 대상 위치의 접선/반지름 성분(정규화). */
 export function applyKnock(b, dirT, dirR, dv) {
-  b.kbVt = dirT * dv; b.kbVr = dirR * dv; b.kbT = CFG.knockDuration; b.kb0 = dv;
+  b.kbVt = dirT * dv; b.kbVr = dirR * dv; b.kbT = CFG.knockDuration;
 }

@@ -11,7 +11,7 @@ export const defaultSave = () => ({
   equipped: 'basic',
   aiLevel: 1,
   stats: { matches: 0, wins: 0, best: null },
-  settings: { volume: 0.8, muted: false, quality: 'auto' },
+  settings: { volume: 0.8, muted: false, music: true, quality: 'auto' },
   tips: {},
   name: '',
 });
@@ -34,6 +34,7 @@ export function sanitize(raw) {
   const s = raw.settings || {};
   d.settings.volume = Number.isFinite(s.volume) ? Math.min(1, Math.max(0, s.volume)) : 0.8;
   d.settings.muted = !!s.muted;
+  d.settings.music = s.music !== false;
   d.settings.quality = ['auto', 'high', 'low'].includes(s.quality) ? s.quality : 'auto';
   if (raw.tips && typeof raw.tips === 'object') for (const k of Object.keys(raw.tips).slice(0, 30)) d.tips[k] = true;
   d.name = typeof raw.name === 'string' ? raw.name.slice(0, 10) : '';

@@ -50,6 +50,7 @@ const ui = new UI(document.getElementById('ui'), save, {
   ready: () => (online.inMatch ? online.ready() : sim.skipWait()),
   volume: (v) => { save.settings.volume = v; sfx.apply(); persist(save); },
   mute: () => { save.settings.muted = !save.settings.muted; sfx.apply(); persist(save); },
+  music: (on) => { save.settings.music = on; sfx.loop('music', on ? 0.22 : 0); persist(save); },
   quality: (q) => { save.settings.quality = q; applyQuality(); persist(save); },
   canShop: () => mode === 'title' || sim.phase !== 'leg',
   thumb: (id, lv) => view.gunThumb(id, lv),
@@ -69,7 +70,7 @@ const ui = new UI(document.getElementById('ui'), save, {
   },
 });
 const input = new Input(canvas, document.querySelector('.touch'));
-input.onAny = () => { sfx.unlock(); sfx.loop('lava_loop', 0.16); sfx.loop('music', 0.22); };
+input.onAny = () => { sfx.unlock(); sfx.loop('lava_loop', 0.16); sfx.loop('music', save.settings.music ? 0.22 : 0); };
 input.onKey = (code) => {
   if (code === 'Escape' || code === 'KeyP') {
     if (ui.panel) { if (ui.panel.name !== 'results') ui.closePanel(); }

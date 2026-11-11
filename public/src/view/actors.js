@@ -181,6 +181,7 @@ export class ActorView {
     this.pos.set(w.x, w.y, w.z);
     const sn = Math.sin(th), cs = Math.cos(th);
 
+    if (this.death && a.alive) { this.death = null; this.pop = 0; }   // 복귀·역할 교대로 다시 살아났으면 연출 종료
     if (this.death) {                                     // 용암 발사 연출
       const d = this.death; d.t += dt;
       const t = d.t, up = 30 * t - 34 * t * t;
