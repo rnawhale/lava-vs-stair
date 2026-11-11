@@ -8,6 +8,7 @@ import { Input } from './input.js';
 import { UI } from './ui.js';
 import { Sfx } from './audio.js';
 import { loadSave, persist, loadoutOf } from './save.js';
+import { Online } from './online.js';
 
 const canvas = document.getElementById('game');
 const save = loadSave();
@@ -27,13 +28,26 @@ applyQuality();
 const ui = new UI(document.getElementById('ui'), save, {
   click: () => sfx.play('click'),
   play: () => startSolo(),
-  online: () => ui.say('<small>온라인 대전은 준비 중이에요</small>', '', 1600),
+  online: () => ui.openOnline(roomParam),
+  isOnline: () => online.active,
+  joinRoom: async (name) => {
+    save.name = name.slice(0, 10); persist(save);
+    try {
+      await online.join(roomParam || randomCode(), save.name || '손님', loadoutOf(save));
+      roomParam = online.net.room;
+      history.replaceState(null, '', '?room=' + roomParam);
+      ui.openLobby(lobbyView());
+    } catch (e) { ui.openOnline(roomParam, e.message); }
+  },
+  leaveRoom: () => leaveRoom(),
+  fill: (v) => online.setFill(v),
+  startOnline: () => online.start(),
   pause: () => openPause(),
   resume: () => ui.closePanel(),
   restart: () => startSolo(),
-  again: () => startSolo(),
-  quit: () => startAttract(),
-  ready: () => sim.skipWait(),
+  again: () => (online.active ? ui.openLobby(lobbyView()) : startSolo()),
+  quit: () => (online.active ? leaveRoom() : startAttract()),
+  ready: () => (online.inMatch ? online.ready() : sim.skipWait()),
   volume: (v) => { save.settings.volume = v; sfx.apply(); persist(save); },
   mute: () => { save.settings.muted = !save.settings.muted; sfx.apply(); persist(save); },
   quality: (q) => { save.settings.quality = q; applyQuality(); persist(save); },
@@ -41,16 +55,17 @@ const ui = new UI(document.getElementById('ui'), save, {
   thumb: (id, lv) => view.gunThumb(id, lv),
   // 모달이 열려 있는 동안 솔로 경기는 멈춘다(상점에서 시간에 쫓기지 않게)
   panel: (name, open) => {
-    if (mode !== 'match') return;
-    if (name === 'results') return;
-    paused = open;
+    if (!open && name === 'shop' && ui.lobbyBack) { ui.lobbyBack = false; if (online.active) return ui.openLobby(lobbyView()); }
+    if (mode !== 'match' || name === 'results' || name === 'lobby') return;
+    if (!online.active) paused = open;                 // 온라인 경기는 멈추지 않는다
     if (!open && name === 'shop' && sim.phase === 'results' && ui.resultsInfo) ui.showResults(ui.resultsInfo);
   },
   shopChanged: (act, id) => {
     persist(save);
     sfx.play(act === 'up' ? 'upgrade' : act === 'deny' ? 'deny' : act);
     // 차례가 진행 중이면 sim이 현재 능력치를 그대로 두고 다음 차례부터 적용한다
-    if (mode === 'match') sim.setLoadout('me', save.equipped, save.levels[save.equipped]);
+    if (mode === 'match') sim.setLoadout(me.id, save.equipped, save.levels[save.equipped]);
+    online.setLoadout(loadoutOf(save));
   },
 });
 const input = new Input(canvas, document.querySelector('.touch'));
@@ -67,6 +82,25 @@ document.addEventListener('pointerdown', () => input.onAny(), { once: true });
 addEventListener('resize', () => view.resize());
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'match' && !ui.panel && sim.phase !== 'results') openPause(); });
 
+// ── 온라인 ──
+let roomParam = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || null;
+const randomCode = () => Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[(Math.random() * 32) | 0]).join('');
+const online = new Online({
+  lobby: () => { if (ui.panel?.name === 'lobby') ui.openLobby(lobbyView()); },
+  start: (players, opts) => { beginMatch(players, opts); return sim; },
+  closed: (msg) => { startAttract(); ui.say(`<small>${msg}</small>`, '', 2500); },
+  note: (html) => ui.note(html),
+});
+function lobbyView() {
+  return { room: online.net.room, link: online.link, isHost: online.isHost, fill: online.fill, canStart: online.canStart(),
+    players: online.roster().map((p) => ({ ...p, me: p.id === online.id, host: p.id === online.net.hostId })) };
+}
+function leaveRoom() {
+  online.leave(); roomParam = null;
+  history.replaceState(null, '', location.pathname);
+  startAttract();
+}
+
 function openPause() { if (mode === 'match' && sim.phase !== 'results') ui.openPause(); }
 
 const shuffled = (xs) => xs.map(x => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
@@ -82,13 +116,17 @@ function startAttract() {
 
 function startSolo() {
   const lv = save.aiLevel, names = shuffled(CFG.botNames);
-  sim = new Sim([
+  beginMatch([
     { id: 'me', name: save.name || '나', team: 0, kind: 'human', local: true, loadout: loadoutOf(save) },
     { id: 'b1', name: names[0], team: 0, kind: 'bot', loadout: botLoadout(lv, 1) },
     { id: 'b2', name: names[1], team: 1, kind: 'bot', loadout: botLoadout(lv, 0) },
     { id: 'b3', name: names[2], team: 1, kind: 'bot', loadout: botLoadout(lv, 1) },
   ], { aiLevel: lv, firstClimb: save.stats.matches % 2 });   // 첫 경기는 내가 먼저 등반
-  me = sim.actor('me'); mode = 'match'; paused = false; earned = 0; bestNew = null; acc = 0;
+}
+
+function beginMatch(players, opts) {
+  sim = new Sim(players, opts);
+  me = sim.actors.find((a) => a.p.local); mode = 'match'; paused = false; earned = 0; bestNew = null; acc = 0;
   view.attach(sim);
   ui.startMatch(sim, me, input.isTouch || coarse);
   ui.fade();
@@ -105,7 +143,8 @@ function finishMatch(result) {
   save.stats.matches++;
   const name = (lv) => `${CFG.ai.levels[lv - 1].name} ${'★'.repeat(lv)}`;
   let levelMsg;
-  if (won) {
+  if (online.active) { if (won) save.stats.wins++; levelMsg = '온라인 대전 · 대기실에서 방장이 다음 경기를 시작해요'; }
+  else if (won) {
     save.stats.wins++;
     if (save.aiLevel < 5) { save.aiLevel++; levelMsg = `이겼으니 다음 AI는 더 매워져요 → ${name(save.aiLevel)}`; }
     else levelMsg = '최고 난이도 불지옥맛을 꺾었어요!';
@@ -113,7 +152,7 @@ function finishMatch(result) {
   else levelMsg = `다음 AI: ${name(save.aiLevel)}`;
   persist(save);
   ui.hideHint(); ui.hideInter();
-  ui.showResults({ result, earned, best: bestNew, levelMsg });
+  ui.showResults({ result, earned, best: bestNew, levelMsg, online: online.active });
   sfx.play(won ? 'win' : draw ? 'stage' : 'lose');
 }
 
@@ -150,6 +189,7 @@ function handle(e) {
   if (mode !== 'match') return;
   ui.onEvent(e, view);
   sound(e);
+  online.onLocalEvent(e);
   switch (e.type) {
     case 'phase':
       if (e.phase === 'countdown') ui.showInter(true);
@@ -180,6 +220,7 @@ function tick() {
     if (me.role === 'shoot') { const m = input.aimNdc(); me.inp.aim = view.aimPoint(m.x, m.y, me); }
   }
   sim.step(STEP);
+  if (mode === 'match') online.afterStep(STEP);
   if (sim.events.length) { const evs = sim.events; sim.events = []; for (const e of evs) handle(e); }
   // 첫 등반 때 한 번: 움직이는 계단 설명
   if (me && me.role === 'climb' && sim.phase === 'leg' && !save.tips.stairs && me.body.ground?.kind === 'step') {
@@ -254,6 +295,7 @@ function advise(level = 5) {
   const want = tb.th + 0.2 - me.body.th;
   return { role: 'shoot', fwd: Math.abs(want) * me.body.r > 3 ? Math.sign(want) : 0, out: 0, x: s.x, y: s.y, fire: sim.phase === 'leg' && s.visible && !best.safe && best.protectT <= 0 && dist < me.gun.range * 0.95 };
 }
-window.__lvs = { get sim() { return sim; }, get me() { return me; }, get paused() { return paused; }, set speed(v) { speed = v; }, view, ui, input, save, sfx, CFG, startSolo, startAttract, advise, persist: () => persist(save) };
+window.__lvs = { get sim() { return sim; }, get me() { return me; }, get paused() { return paused; }, online, set speed(v) { speed = v; }, view, ui, input, save, sfx, CFG, startSolo, startAttract, advise, persist: () => persist(save) };
 startAttract();
+if (roomParam) ui.openOnline(roomParam);        // 초대 링크로 들어온 경우
 requestAnimationFrame(frame);

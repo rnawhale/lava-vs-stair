@@ -289,7 +289,10 @@ export class UI {
       <div class="inter-b"><button class="mid shop-open">🔫 상점</button><button class="mid go ready">준비 완료 ▶</button></div>`;
     this.inter.hidden = false;
     $('.shop-open', this.inter).onclick = () => { this.h.click?.(); this.openShop(); };
-    $('.ready', this.inter).onclick = () => { this.h.click?.(); this.h.ready(); };
+    $('.ready', this.inter).onclick = (e) => {
+      this.h.click?.(); this.h.ready();
+      if (this.h.isOnline()) { e.currentTarget.disabled = true; e.currentTarget.textContent = '준비됨 ✓ (모두 기다리는 중)'; }
+    };
   }
   hideInter() { this.inter.hidden = true; }
 
@@ -309,13 +312,15 @@ export class UI {
   }
 
   openPause() {
+    const on = this.h.isOnline();
     this.openPanel('pause', `
-      <h2>일시정지</h2>
+      <h2>${on ? '메뉴' : '일시정지'}</h2>
+      ${on ? '<p class="shop-note">온라인 경기는 멈추지 않아요</p>' : ''}
       <div class="col">
         <button class="big resume">▶ 계속하기</button>
-        <button class="mid restart">↻ 처음부터 다시</button>
+        <button class="mid restart" ${on ? 'hidden' : ''}>↻ 처음부터 다시</button>
         <button class="mid opt">⚙ 소리·화질</button>
-        <button class="mid quit">타이틀로</button>
+        <button class="mid quit">${on ? '방 나가기' : '타이틀로'}</button>
       </div>
       <p class="keys">이동 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · 점프 <kbd>Space</kbd> · 조준/발사 마우스 · 일시정지 <kbd>Esc</kbd></p>`, false);
     $('.resume', this.sheet).onclick = () => { this.h.click?.(); this.h.resume(); };
@@ -398,6 +403,50 @@ export class UI {
     this.syncCoins();
   }
 
+  // ── 온라인: 입장과 대기실 ──
+  openOnline(room, err) {
+    this.openPanel('online', `
+      <header><h2>👥 친구 초대 대전</h2><button class="x" aria-label="닫기">✕</button></header>
+      <p class="shop-note">링크 하나로 2~4명이 함께 해요. 빈 자리는 AI가 채워 2대2가 됩니다. 로그인은 필요 없어요.</p>
+      <label class="row">닉네임 <input class="nick" type="text" maxlength="10" placeholder="손님" value="${esc(this.save.name)}" autocomplete="off"></label>
+      <div class="col"><button class="big join">${room ? `방 ${esc(room)} 참가하기` : '새 방 만들기'}</button></div>
+      <p class="msg">${err ? esc(err) : ''}</p>`);
+    $('.x', this.sheet).onclick = () => { this.h.click?.(); this.closePanel(); };
+    const btn = $('.join', this.sheet);
+    btn.onclick = () => {
+      this.h.click?.();
+      btn.disabled = true; btn.textContent = '연결 중…';
+      this.h.joinRoom($('.nick', this.sheet).value.trim());
+    };
+  }
+  openLobby(v) {
+    const slot = (p) => `<div class="slot" style="--c:${teamCss(p.team)}"><i></i><b>${p.kind === 'bot' ? '<i class="ai">AI</i>' : ''}${esc(p.name)}</b>
+      <span>${CFG.teams[p.team].name} 팀${p.me ? ' · 나' : ''}${p.host ? ' · 방장' : ''}</span></div>`;
+    const humans = v.players.filter(p => p.kind === 'human').length;
+    this.openPanel('lobby', `
+      <header><h2>대기실 <span class="code">${esc(v.room)}</span></h2><button class="x" aria-label="나가기">✕</button></header>
+      <div class="invite"><input class="link" type="text" readonly value="${esc(v.link)}"><button class="mid copy">초대 링크 복사</button></div>
+      <p class="shop-note">이 링크를 친구에게 보내면 바로 들어와요 (${humans}/4명 접속)</p>
+      <div class="slots">${v.players.map(slot).join('')}${v.players.length < 4 ? '<div class="slot empty"><b>빈 자리</b><span>초대를 기다리는 중…</span></div>'.repeat(4 - v.players.length) : ''}</div>
+      ${v.isHost ? `<label class="row">빈 자리를 AI로 채우기 <input type="checkbox" class="fillc" ${v.fill ? 'checked' : ''}></label>` : ''}
+      <div class="res-b">
+        ${v.isHost ? `<button class="big start" ${v.canStart ? '' : 'disabled'}>경기 시작 ▶${v.canStart ? '' : '<small>양 팀에 한 명 이상 필요해요</small>'}</button>` : '<div class="wait">방장이 시작하면 경기가 열려요…</div>'}
+        <button class="mid shop-open">🔫 상점</button>
+      </div>`, false);
+    $('.x', this.sheet).onclick = () => { this.h.click?.(); this.h.leaveRoom(); };
+    $('.copy', this.sheet).onclick = async (e) => {
+      this.h.click?.();
+      const input = $('.link', this.sheet);
+      try { await navigator.clipboard.writeText(input.value); } catch { input.select(); document.execCommand?.('copy'); }
+      e.currentTarget.textContent = '복사됨 ✓';
+    };
+    $('.shop-open', this.sheet).onclick = () => { this.h.click?.(); this.lobbyBack = true; this.openShop(); };
+    if (v.isHost) {
+      $('.fillc', this.sheet).onchange = (e) => this.h.fill(e.target.checked);
+      $('.start', this.sheet).onclick = () => { this.h.click?.(); this.h.startOnline(); };
+    }
+  }
+
   // ── 결과 ──
   showResults(info) {
     const sim = this.sim, me = this.me, res = info.result;
@@ -420,7 +469,7 @@ export class UI {
         <div class="earn"><span class="coin"></span>이번 경기 <b>+${info.earned}</b> · 보유 <b>${this.save.coins}</b>${info.best ? ` · <em>최고 기록 ${info.best.toFixed(1)}s!</em>` : ''}</div>
         <div class="next">${info.levelMsg}</div>
       </div>
-      <div class="res-b"><button class="big again">한 판 더! ▶</button><button class="mid shop-open">🔫 상점</button><button class="mid quit">타이틀</button></div>`, false);
+      <div class="res-b"><button class="big again">${info.online ? '대기실로 ▶' : '한 판 더! ▶'}</button><button class="mid shop-open">🔫 상점</button><button class="mid quit">${info.online ? '방 나가기' : '타이틀'}</button></div>`, false);
     $('.again', this.sheet).onclick = () => { this.h.click?.(); this.h.again(); };
     $('.quit', this.sheet).onclick = () => { this.h.click?.(); this.h.quit(); };
     $('.shop-open', this.sheet).onclick = () => { this.h.click?.(); this.resultsInfo = info; this.openShop(); };

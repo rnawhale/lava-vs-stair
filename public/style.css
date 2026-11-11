@@ -204,6 +204,18 @@ button.act:active { transform: translateY(2px); }
 .res-f { margin: 0.8em 0; font-weight: 800; line-height: 1.7; } .res-f em { color: #ffd84a; font-style: normal; } .res-f .next { opacity: 0.85; font-size: 0.9em; }
 .res-b { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; } .res-b .big { flex: 1 1 100%; }
 
+.sheet.online, .sheet.lobby { width: min(100%, 520px); }
+.sheet input[type="text"] { flex: 1; min-width: 0; padding: 0.55em 0.8em; border-radius: 12px; border: 2px solid var(--line); background: #15101c; color: #fff; font: inherit; font-weight: 800; -webkit-user-select: text; user-select: text; }
+.sheet .msg { min-height: 1.4em; margin: 0.6em 0 0; color: #ff8a6a; font-weight: 800; text-align: center; }
+.sheet .code { margin-left: 0.4em; padding: 0.1em 0.5em; border-radius: 8px; background: var(--lava); letter-spacing: 0.12em; }
+.invite { display: flex; gap: 8px; } .invite input { font-size: 0.82em !important; }
+.slots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0.4em 0 0.6em; }
+.slot { padding: 0.6em 0.7em; border-radius: 14px; background: rgba(255, 255, 255, 0.06); border: 2px solid var(--c, var(--line)); }
+.slot > i { display: inline-block; width: 0.85em; height: 0.85em; border-radius: 50%; background: var(--c); margin-right: 0.45em; }
+.slot b { font-weight: 900; } .slot span { display: block; font-size: 0.78em; opacity: 0.75; margin-top: 0.15em; }
+.slot.empty { border-style: dashed; opacity: 0.55; }
+.wait { flex: 1 1 100%; padding: 0.9em; border-radius: 14px; background: rgba(255, 255, 255, 0.06); font-weight: 800; text-align: center; }
+
 .fade { position: absolute; inset: 0; background: #0d0a12; opacity: 0; pointer-events: none; }
 .fade.go { animation: fade 0.5s; } @keyframes fade { 0% { opacity: 1; } 100% { opacity: 0; } }
 
