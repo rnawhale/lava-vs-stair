@@ -79,7 +79,7 @@ export class View {
       case 'land': if (v) { v.land(e.v); fx.dust(v.pos.x, v.pos.y, v.pos.z, Math.min(1.4, e.v / 70)); } break;
       case 'ledge': if (v) { v.land(40); fx.dust(v.pos.x, v.pos.y, v.pos.z, 0.5); } break;
       case 'fall': if (v) { v.die(e.x, e.y, e.z); fx.lavaBurst(e.x, e.y, e.z); if (e.a.p.local) this.cam.shake = 0.5; } break;
-      case 'respawn': if (v) { v.onRespawn(); const w = toWorld(e.a.body.th, e.a.body.r, e.a.body.y); fx.sparkle(w.x, w.y, w.z, 0xb6ff8a); if (e.a.p.local) this.cam.snap = true; } break;
+      case 'respawn': if (v) { v.onRespawn(); const w = toWorld(e.a.body.th, e.a.body.r, e.a.body.y); fx.sparkle(w.x, w.y, w.z, 0xb6ff8a); } break;
       case 'stage': if (v) fx.confetti(v.pos.x, v.pos.y, v.pos.z, e.a.p.local ? 60 : 26); break;
       case 'shot': if (v) v.onFire(); break;
       case 'splash': fx.splash(e); break;
@@ -158,13 +158,19 @@ export class View {
       lx = 0; ly = 40; lz = 0; kT = kR = kY = 2;
     } else {
       const v = this.views.get(local.id), b = local.body;
-      const th = b.pth + (b.th - b.pth) * this.alpha, r = b.pr + (b.r - b.pr) * this.alpha, y = b.py + (b.y - b.py) * this.alpha;
+      let th = b.pth + (b.th - b.pth) * this.alpha, r = b.pr + (b.r - b.pr) * this.alpha, y = b.py + (b.y - b.py) * this.alpha;
+      if (local.role === 'climb' && !local.alive && !(v?.death && v.death.t < 1.05)) {
+        // 용암 연출이 끝나면 다시 나타날 발판으로 미리 미끄러져 간다(복귀 순간 화면이 튀지 않게)
+        const pad = this.sim.course.pads[Math.min(local.stageDone, 3)];
+        th = pad.thc; r = RP; y = pad.top;
+        c.focusY = lerp(c.focusY, y, damp(6, dt));
+      }
       if (local.role === 'climb') {
         // 높이는 디딘 발판 기준으로 천천히 따라가서 점프마다 화면이 출렁이지 않게 한다
         if (b.ground) c.focusY = lerp(c.focusY, y, damp(7, dt));
         else if (y > c.focusY + 7) c.focusY = lerp(c.focusY, y - 7, damp(6, dt));
         else if (y < c.focusY - 3) c.focusY = lerp(c.focusY, Math.max(y, c.focusY - 14), damp(3, dt));
-        const dead = !local.alive;
+        const dead = !local.alive && !!v?.death && v.death.t < 1.05;
         const portrait = this.w < this.h;
         // 살짝 뒤쪽 바깥에서 비스듬히: 앞으로 올라갈 계단이 화면 오른쪽에 길게 보인다
         tth = th - 10 / RP; tr = RP + (portrait ? 56 : 43); ty = c.focusY + (portrait ? 24 : 18);

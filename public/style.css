@@ -151,7 +151,7 @@ body.touch .hint { bottom: auto; top: calc(128px + var(--sat)); border-radius: 1
 .title-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 0.5em; }
 .chip { display: inline-flex; align-items: center; padding: 0.4em 0.85em; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-weight: 800; }
 .chip .stars { color: #ffd84a; margin-left: 0.4em; letter-spacing: 0.05em; } .chip .stars s { text-decoration: none; color: rgba(255, 255, 255, 0.22); }
-.keys { margin: 0.5em 0 0; font-size: 0.82em; opacity: 0.9; line-height: 1.9; }
+.keys { margin: 0.5em 0 0; font-size: 0.82em; opacity: 0.9; line-height: 1.9; } .keys span { white-space: nowrap; }
 
 /* ── 모달 ── */
 .modal { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: calc(10px + var(--sat)) calc(10px + var(--sar)) calc(10px + var(--sab)) calc(10px + var(--sal)); background: rgba(8, 5, 12, 0.62); }
@@ -167,7 +167,7 @@ body.touch .hint { bottom: auto; top: calc(128px + var(--sat)); border-radius: 1
 .sheet input[type="checkbox"] { width: 26px; height: 26px; accent-color: var(--lava); }
 .seg { display: inline-flex; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
 .seg button { padding: 0.5em 0.9em; background: #2a2336; font-weight: 800; } .seg button.on { background: var(--lava); }
-.sheet.pause { width: min(100%, 380px); text-align: center; }
+.sheet.pause { width: min(100%, 420px); text-align: center; }
 
 .sheet.shop { width: min(100%, 940px); }
 .shop-note { margin: 0 0 0.8em; font-size: 0.84em; opacity: 0.85; line-height: 1.5; }

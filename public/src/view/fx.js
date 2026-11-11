@@ -137,7 +137,7 @@ export class Fx {
     }
   }
   flame(x, y, z) {
-    for (let i = 0; i < 3; i++) this.add.emit(x + rnd(0.6), y + rnd(0.5), z + rnd(0.6), rnd(3), -4 - Math.random() * 6, rnd(3), 0.35 + Math.random() * 0.2, 2.2 + Math.random(), pick(FIRE), 0.9, -6, 1);
+    for (let i = 0; i < 2; i++) this.add.emit(x + rnd(0.5), y + rnd(0.4), z + rnd(0.5), rnd(3), -5 - Math.random() * 7, rnd(3), 0.3 + Math.random() * 0.15, 1.3 + Math.random() * 0.7, pick(FIRE), 0.55, -6, 1);
   }
   lavaBurst(x, y, z) {
     for (let i = 0; i < 34; i++) {

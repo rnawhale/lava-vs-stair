@@ -173,7 +173,7 @@ export class UI {
     // 이름표
     for (const a of sim.actors) {
       const tag = this.tagEls.get(a.id), v = view.views.get(a.id);
-      const show = v.root.visible || !!v.death;
+      const show = v.root.visible;
       const p = view.project(v.head, this.tmp);
       if (!show || !p.visible || (a.role === 'climb' && !a.alive && !v.death)) { tag.style.display = 'none'; continue; }
       tag.style.display = '';
@@ -333,7 +333,7 @@ export class UI {
         <button class="mid opt">⚙ 소리·화질</button>
         <button class="mid quit">${on ? '방 나가기' : '타이틀로'}</button>
       </div>
-      <p class="keys">이동 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · 점프 <kbd>Space</kbd> · 조준/발사 마우스 · 일시정지 <kbd>Esc</kbd></p>`, false);
+      <p class="keys"><span>이동 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> · <span>점프 <kbd>Space</kbd></span> · <span>조준/발사 마우스</span> · <span>일시정지 <kbd>Esc</kbd></span></p>`, false);
     $('.resume', this.sheet).onclick = () => { this.h.click?.(); this.h.resume(); };
     $('.restart', this.sheet).onclick = () => { this.h.click?.(); this.h.restart(); };
     $('.quit', this.sheet).onclick = () => { this.h.click?.(); this.h.quit(); };
