@@ -37,7 +37,8 @@ export class UI {
 <div class="cross" hidden><i></i><span></span></div>
 <div class="touch" hidden><div class="stick"><div class="knob"></div></div><button class="btn-jump">점프</button><div class="fire-tip">화면을 눌러 조준·발사</div></div>
 <div class="title" hidden>
-  <div class="logo"><span class="l1">LAVA</span><span class="l2">VS</span><span class="l3">STAIR</span></div>
+  <img class="logo-img" src="assets/img/logo.webp" alt="Lava VS Stair" onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+  <div class="logo" hidden><span class="l1">LAVA</span><span class="l2">VS</span><span class="l3">STAIR</span></div>
   <p class="tagline">용암 위 계단을 오르고, 물총으로 방해하라!</p>
   <div class="menu">
     <button class="big play">▶ 바로 플레이<small>AI 대전 · 로그인 없음</small></button>

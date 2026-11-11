@@ -9,7 +9,7 @@ export const COLORS = {
   pad: 0x9dff5a,       // 연두 = 물총 안전 지대
   warn: 0xff3b1f,
   lane: 0x49c6ff,
-  fog: 0x4a1410,
+  fog: 0xa83a16,
 };
 
 const canvasTex = (size, draw, opts = {}) => {
@@ -184,14 +184,14 @@ void main(){
   vec2 q = vec2(fbm(p + t), fbm(p + vec2(5.2, 1.3) - t));
   float n = fbm(p + 2.4*q + vec2(t*0.7, -t*0.4));
   float ridge = 1.0 - abs(2.0*n - 1.0);
-  float veins = smoothstep(0.86, 0.995, ridge);
+  float veins = smoothstep(0.9, 0.995, ridge);
   float hot = smoothstep(0.3, 0.85, n);
   vec3 crust = mix(vec3(0.035, 0.008, 0.008), vec3(0.34, 0.045, 0.006), hot);
-  vec3 glow = mix(vec3(1.0, 0.33, 0.03), vec3(1.0, 0.82, 0.32), veins);
+  vec3 glow = mix(vec3(1.0, 0.3, 0.03), vec3(1.0, 0.7, 0.2), veins);
   float pulse = 0.6 + 0.4*sin(uTime*0.9 + n*18.0);
-  vec3 col = mix(crust, glow*1.7, veins*pulse);
+  vec3 col = mix(crust, glow*1.25, veins*pulse);
   float d = length(vW.xz);
-  col += vec3(1.0, 0.36, 0.05) * 0.22 * smoothstep(120.0, 62.0, d);     // 탑 주변은 더 뜨겁다
+  col += vec3(1.0, 0.3, 0.04) * 0.1 * smoothstep(120.0, 62.0, d);     // 탑 주변은 더 뜨겁다
   float fd = distance(cameraPosition, vW) * uDensity;
   col = mix(col, uFog, 1.0 - exp(-fd*fd));
   gl_FragColor = vec4(col, 1.0);
@@ -215,10 +215,8 @@ ${NOISE}
 void main(){
   vec3 d = normalize(vD);
   float h = d.y;
-  vec3 top = vec3(0.012, 0.014, 0.05), mid = vec3(0.13, 0.035, 0.12), glow = vec3(1.0, 0.36, 0.1);
-  vec3 col = mix(mid, top, smoothstep(0.08, 0.7, h));
-  col = mix(uFog, col, smoothstep(-0.02, 0.2, h));
-  col += glow * 0.35 * exp(-max(h, 0.0) * 9.0);
+  vec3 top = vec3(0.03, 0.02, 0.09), mid = vec3(0.17, 0.07, 0.26);
+  vec3 col = mix(mid, top, smoothstep(0.55, 0.95, h));      // 파노라마 위쪽 하늘색과 이어진다
   // 연기 구름
   vec2 cuv = d.xz / (abs(h) + 0.25);
   float cl = fbm(cuv * 1.6 + uTime * 0.01);
@@ -237,24 +235,17 @@ void main(){
   return mesh;
 }
 
-/** 멀리 둘러선 화산 능선 실루엣 */
-function makeMountains() {
-  const N = 180, R = 1250, pos = [], col = [], idx = [];
-  const base = new THREE.Color(0x1d0a10), tip = new THREE.Color(0x0a0509);
-  for (let i = 0; i <= N; i++) {
-    const a = i / N * Math.PI * 2;
-    const k = i % N;
-    const h = 60 + 130 * Math.abs(Math.sin(k * 0.37) * Math.sin(k * 0.11 + 1.3)) + 60 * Math.abs(Math.sin(k * 1.7)) + (k % 37 === 5 ? 190 : 0);
-    pos.push(Math.cos(a) * R, -10, Math.sin(a) * R, Math.cos(a) * R, h, Math.sin(a) * R);
-    col.push(base.r, base.g, base.b, tip.r, tip.g, tip.b);
-    if (i < N) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.setIndex(idx);
-  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false }));
-  m.renderOrder = -5;
+/** 멀리 둘러선 화산 파노라마(생성 이미지). 좌우를 거울 반복해 이음매 없이 한 바퀴 감는다. */
+function makeBackdrop() {
+  const R = 1500, H = (2 * Math.PI * R / 2) / 3;     // 그림(3:1) 두 장이 한 바퀴
+  const tex = new THREE.TextureLoader().load('assets/img/backdrop.webp');
+  tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.MirroredRepeatWrapping; tex.repeat.x = 2;
+  const m = new THREE.Mesh(
+    new THREE.CylinderGeometry(R, R, H, 72, 1, true),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false }),
+  );
+  m.position.y = H * 0.5 - H * 0.215;                 // 그림 속 용암 수평선을 실제 용암 높이에 맞춘다
+  m.renderOrder = -8;
   return m;
 }
 
@@ -387,7 +378,7 @@ export function buildWorld(scene, course) {
   scene.fog = fog;
   scene.background = new THREE.Color(COLORS.fog);
   const sky = makeSky(fog), lava = makeLava(fog);
-  scene.add(sky, makeMountains(), lava);
+  scene.add(sky, makeBackdrop(), lava);
 
   // 조명: 차가운 달빛 + 용암의 붉은 반사광
   scene.add(new THREE.HemisphereLight(0x9fb0ff, 0xff5a1c, 1.6));
@@ -410,6 +401,24 @@ export function buildWorld(scene, course) {
   for (const t of [tt.map, tt.emis, tt.bump]) t.repeat.set(12, H / (2 * Math.PI * CFG.towerRadius / 12));
   tower.position.y = H / 2 - 40; tower.receiveShadow = true; tower.castShadow = true;
   scene.add(tower);
+  new THREE.TextureLoader().load('assets/img/wall.webp', (map) => {
+    const S = 512, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(map.image, 0, 0, S, S);
+    const img = g.getImageData(0, 0, S, S), d = img.data;
+    for (let i = 0; i < d.length; i += 4) {             // 주황 균열만 남겨 발광 맵으로
+      const e = Math.min(1, Math.max(0, (d[i] - d[i + 2] * 1.5 - 30) / 110));
+      d[i] *= e; d[i + 1] *= e * 0.75; d[i + 2] *= e * 0.25;
+    }
+    g.putImageData(img, 0, 0);
+    const emis = new THREE.CanvasTexture(c);
+    const rep = 10, tile = (2 * Math.PI * CFG.towerRadius) / rep;
+    for (const t of [map, emis]) { t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.MirroredRepeatWrapping; t.repeat.set(rep, H / tile); t.anisotropy = 8; }
+    Object.assign(tower.material, { map, emissiveMap: emis, bumpMap: map, bumpScale: 3.2, emissiveIntensity: 2.4 });
+    tower.material.color.setScalar(1.35);
+    tower.material.needsUpdate = true;
+  });
   // 용암에 잠긴 밑동의 열기
   const heat = canvasTex(64, (g) => {
     const gr = g.createLinearGradient(0, 0, 0, 64);

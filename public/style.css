@@ -137,6 +137,8 @@ body.touch .hint { bottom: auto; top: calc(128px + var(--sat)); border-radius: 1
 /* ── 타이틀 ── */
 .title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.7em; padding: 16px; text-align: center;
   background: radial-gradient(ellipse at 50% 40%, rgba(13, 10, 18, 0.35), rgba(13, 10, 18, 0.8)); }
+.logo-img { width: min(92vw, 760px); max-height: 38vh; object-fit: contain; margin: -1.2em 0 -1.6em; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55)); animation: logoIn 0.7s cubic-bezier(0.2, 1.5, 0.4, 1); }
+@keyframes logoIn { from { transform: scale(0.6) rotate(-4deg); opacity: 0; } }
 .logo { display: flex; align-items: baseline; gap: 0.18em; font-weight: 900; font-size: clamp(40px, 11vw, 112px); line-height: 0.95; letter-spacing: -0.02em; filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.45)); }
 .logo .l1 { background: linear-gradient(#ffe36a, #ff7a1a 55%, #d92b00); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 2px #5a1300; }
 .logo .l2 { font-size: 0.38em; color: #fff; background: #1b1420; padding: 0.25em 0.45em; border-radius: 0.4em; transform: rotate(-8deg) translateY(-0.6em); border: 3px solid #fff; }

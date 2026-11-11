@@ -1,6 +1,4 @@
-// 효과음: assets/sfx/*.mp3 이 있으면 그것을 쓰고, 없으면 WebAudio 합성음으로 대신한다.
-const SAMPLES = ['jump', 'land', 'warn', 'retract', 'extend', 'shot_basic', 'shot_rapid', 'shot_heavy', 'hit', 'splash', 'shield',
-  'fall', 'respawn', 'stage', 'finish', 'coin', 'buy', 'upgrade', 'equip', 'click', 'count', 'go', 'win', 'lose', 'nearmiss', 'deny', 'lava_loop', 'music'];
+// 효과음: assets/sfx/manifest.json 에 적힌 mp3가 있으면 그것을 쓰고, 없으면 WebAudio 합성음으로 대신한다.
 
 export class Sfx {
   constructor(settings) {
@@ -20,10 +18,12 @@ export class Sfx {
     this.noiseBuf = this.ctx.createBuffer(1, len, len);
     const d = this.noiseBuf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    for (const name of SAMPLES) {
-      fetch(`assets/sfx/${name}.mp3`).then(r => (r.ok ? r.arrayBuffer() : Promise.reject())).then(a => this.ctx.decodeAudioData(a))
-        .then(b => { this.buf[name] = b; if (this.loops[name]?.want) this.loop(name, this.loops[name].vol); }).catch(() => {});
-    }
+    fetch('assets/sfx/manifest.json').then(r => (r.ok ? r.json() : [])).then((names) => {
+      for (const name of Array.isArray(names) ? names : []) {
+        fetch(`assets/sfx/${name}.mp3`).then(r => (r.ok ? r.arrayBuffer() : Promise.reject())).then(a => this.ctx.decodeAudioData(a))
+          .then(b => { this.buf[name] = b; if (this.loops[name]?.want) this.loop(name, this.loops[name].vol); }).catch(() => {});
+      }
+    }).catch(() => {});
   }
   apply() { if (this.master) this.master.gain.value = this.s.muted ? 0 : this.s.volume; }
   setListener(cam, right) { const l = this.lis; l.x = cam.x; l.y = cam.y; l.z = cam.z; l.rx = right.x; l.rz = right.z; }

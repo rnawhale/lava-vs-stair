@@ -16,6 +16,7 @@ export function mulberry32(seed) {
 }
 
 const newInput = () => ({ fwd: 0, out: 0, jump: false, hold: false, fire: false, aim: null });
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 export class Sim {
   /**
@@ -152,6 +153,7 @@ export class Sim {
   step(dt) {
     this.time += dt;
     if (this.host) this.tickPhase(dt);
+    else if (this.phase !== 'results') this.phaseT = Math.max(0, this.phaseT - dt);   // 표시용. 전환은 방장이 알려 준다
     if (this.phase === 'leg') this.clock += dt;
     else if (this.phase !== 'results') this.clock = -this.phaseT;
     this.updateStairs();
@@ -171,7 +173,7 @@ export class Sim {
     if (a.protectT > 0) a.protectT -= dt;
     if (a.immuneT > 0) a.immuneT -= dt;
     if (a.cool > 0) a.cool -= dt;
-    if (!a.auth) return;
+    if (!a.auth) return this.stepPuppet(a, dt);
     const bot = a.p.kind === 'bot';
     if (a.role === 'climb') {
       if (!a.alive) {
@@ -256,7 +258,7 @@ export class Sim {
     const s = {
       id: ++this.shotSeq, owner: a, gun: g, x: o.x, y: o.y, z: o.z,
       vx: dx / d * ch, vy: Math.sin(ang) * v, vz: dz / d * ch,
-      px: o.x, py: o.y, pz: o.z, traveled: 0, alive: true, near: {}, barrel: a.shotsFired & 1,
+      px: o.x, py: o.y, pz: o.z, traveled: 0, alive: true, near: {}, n: a.shotsFired,
     };
     a.cool = g.interval; a.shotsFired++; a.fireT = this.time;
     this.shots.push(s);
@@ -336,4 +338,140 @@ export class Sim {
     this.endShot(s, 'hit', { a });
     this.emit('hit', { a, s, by: s.owner, gun: s.gun });
   }
+
+  // ════ 온라인 대전 ════
+  // 각 브라우저는 자기 캐릭터(와 방장은 AI)만 직접 계산(auth)하고, 나머지는 받은 상태를 따라간다.
+  // 맞았는지는 "맞는 쪽"이 판정한다 → 내 화면에서 피한 물줄기에 억울하게 밀리지 않는다.
+
+  packState(a) {
+    const b = a.body, q = (v) => Math.round(v * 100) / 100;
+    return [a.id, +b.th.toFixed(4), q(b.r), q(b.y), q(b.vt + b.kbVt), q(b.vr + b.kbVr), q(b.vy),
+      b.ground ? (b.ground.id ?? -2) : -1,
+      (a.alive ? 1 : 0) | (b.kbT > 0 ? 2 : 0) | (a.safe ? 4 : 0) | (a.protectT > 0 ? 8 : 0) | (a.immuneT > 0 ? 16 : 0),
+      a.aim ? [q(a.aim.x), q(a.aim.y), q(a.aim.z)] : 0, q(Math.max(0, a.windup)), q(a.windupMax)];
+  }
+
+  /** 받은 상태(검증 후)를 꼭두각시의 목표로 삼는다. lag: 보낸 뒤 지난 시간(초) */
+  applyState(s, lag = 0) {
+    if (!Array.isArray(s)) return;
+    const a = this.actor(s[0]);
+    if (!a || a.auth || !s.slice(1, 9).every(Number.isFinite)) return;
+    const [, th, r, y, vt, vr, vy, g, fl] = s;
+    const ground = g >= 0 ? this.course.platforms[g] || null : g === -2 ? this.course.lane : null;
+    const was = a.net ? a.net.ground : a.body.ground;
+    a.net = {
+      th: clamp(th, -0.3, this.course.thEnd + 0.3), r: clamp(r, 60, 112), y: clamp(y, -6, 140),
+      vt: clamp(vt, -70, 70), vr: clamp(vr, -70, 70), vy: clamp(vy, -160, 80), ground, kb: !!(fl & 2), age: clamp(lag, 0, 0.25),
+    };
+    a.safe = !!(fl & 4);
+    a.protectT = fl & 8 ? Math.max(a.protectT, 0.2) : 0;
+    a.immuneT = fl & 16 ? Math.max(a.immuneT, 0.2) : 0;
+    if (Array.isArray(s[9]) && s[9].length === 3 && s[9].every(Number.isFinite)) a.aim = { x: s[9][0], y: s[9][1], z: s[9][2] };
+    a.windup = Number.isFinite(s[10]) ? clamp(s[10], 0, 2) : 0;
+    a.windupMax = Number.isFinite(s[11]) ? clamp(s[11], 0, 2) : 0;
+    if (a.role === 'climb' && a.alive) {
+      if (!was && ground) this.emit('land', { a, v: 45, remote: true });
+      else if (was && !ground && vy > 20) this.emit('jump', { a, remote: true });
+    }
+  }
+
+  stepPuppet(a, dt) {
+    const b = a.body, n = a.net;
+    b.pth = b.th; b.pr = b.r; b.py = b.y;
+    if (a.windup > 0) a.windup -= dt;
+    if (!n || !a.alive) return;
+    n.age += dt;
+    const e = Math.min(n.age, 0.22), g = n.ground ? 0 : CFG.move.gravity;
+    const tth = n.th + (n.vt * e) / n.r, tr = n.r + n.vr * e, ty = n.y + (n.ground ? 0 : n.vy * e - 0.5 * g * e * e);
+    const k = Math.min(1, dt * 20);
+    b.th += (tth - b.th) * k; b.r += (tr - b.r) * k; b.y += (ty - b.y) * k;
+    b.vt = n.vt; b.vr = n.vr; b.vy = n.vy - g * e; b.ground = n.ground; b.kbT = n.kb ? 0.05 : 0;
+  }
+
+  /** 다른 브라우저가 쏜 물줄기를 내 화면에도 띄운다(내 캐릭터가 맞는지는 여기서 판정) */
+  addRemoteShot(m, lag = 0) {
+    const a = this.actor(m.id);
+    if (!a || a.auth || a.role !== 'shoot' || !Array.isArray(m.o) || !Array.isArray(m.v)) return;
+    const o = m.o, v = m.v;
+    if (o.length !== 3 || v.length !== 3 || ![...o, ...v].every(Number.isFinite)) return;
+    if (Math.hypot(v[0], v[1], v[2]) > a.gun.speed * 1.05 + 1) return;         // 총 능력치를 넘는 탄속은 무시
+    const t = clamp(lag, 0, 0.2);
+    const s = {
+      id: ++this.shotSeq, owner: a, gun: a.gun, n: m.n | 0, remote: true, alive: true, near: {},
+      x: o[0] + v[0] * t, y: o[1] + v[1] * t - 0.5 * CFG.waterGravity * t * t, z: o[2] + v[2] * t,
+      vx: v[0], vy: v[1] - CFG.waterGravity * t, vz: v[2], traveled: Math.hypot(v[0], v[1], v[2]) * t,
+    };
+    s.px = s.x; s.py = s.y; s.pz = s.z;
+    a.shotsFired++; a.fireT = this.time;
+    this.shots.push(s);
+    this.emit('shot', { a, s, remote: true });
+  }
+
+  /** 대상 쪽 권한이 알려 온 사건(추락·복귀·단계 완료·명중)을 반영한다 */
+  applyEvent(m) {
+    const a = this.actor(m.id);
+    if (!a || a.auth) return;
+    const num = (v, d = 0) => (Number.isFinite(v) ? v : d);
+    const by = typeof m.by === 'string' ? this.actor(m.by) : null;
+    const endShot = () => { const s = by && this.shots.find((x) => x.alive && x.owner === by && x.n === (m.n | 0)); if (s) s.alive = false; };
+    switch (m.e) {
+      case 'fall':
+        if (!a.alive) break;
+        a.alive = false; a.respawnT = 99;
+        if (this.phase === 'leg') { a.falls++; if (by) by.knockoffs++; }
+        this.emit('fall', { a, x: num(m.x), y: CFG.lavaY, z: num(m.z), by, remote: true });
+        break;
+      case 'respawn':
+        a.alive = true; this.place(a); a.net = null; a.protectT = CFG.respawnProtect;
+        this.emit('respawn', { a, remote: true });
+        break;
+      case 'stage': {
+        const st = m.stage | 0;
+        if (this.phase !== 'leg' || a.role !== 'climb' || st !== a.stageDone + 1 || st > CFG.stages.length) break;   // 순서대로만
+        const cfg = CFG.stages[st - 1], time = clamp(num(m.time, this.clock), 0, CFG.time.leg);
+        a.stageDone = st; a.points += cfg.points; a.stageTimes.push(+time.toFixed(2));
+        this.emit('stage', { a, stage: st, reward: cfg.reward, points: cfg.points, remote: true });
+        if (st === CFG.stages.length) { a.finished = true; this.emit('finish', { a, time, remote: true }); }
+        break;
+      }
+      case 'hit':
+        if (!by || by.role !== 'shoot') break;
+        endShot();
+        a.hitT = this.time; a.immuneT = CFG.hitImmunity; by.hits++;
+        this.emit('splash', { x: num(m.x), y: num(m.y), z: num(m.z), kind: 'hit', gun: by.gun, a });
+        this.emit('hit', { a, s: { owner: by, gun: by.gun }, by, gun: by.gun, remote: true });
+        break;
+      case 'blocked':
+        if (!by) break;
+        endShot();
+        this.emit('splash', { x: num(m.x), y: num(m.y), z: num(m.z), kind: 'shield', gun: by.gun, a });
+        this.emit('blocked', { a, s: { owner: by, gun: by.gun }, reason: ['safe', 'protect', 'immune', 'idle'].includes(m.reason) ? m.reason : 'safe', remote: true });
+        break;
+    }
+  }
+
+  packSync() {
+    return { phase: this.phase, leg: this.leg, pt: +this.phaseT.toFixed(2), ck: +this.clock.toFixed(3),
+      st: this.actors.map((a) => [a.id, a.stageDone, a.points, a.falls, a.hits, a.knockoffs, a.finished ? 1 : 0, a.stageTimes]) };
+  }
+  /** 방장의 공식 기록. all=true(차례 종료)면 내 캐릭터 기록도 방장 것에 맞춘다 */
+  applyScores(rows, all = false) {
+    if (!Array.isArray(rows)) return;
+    for (const row of rows) {
+      const a = Array.isArray(row) && this.actor(row[0]);
+      if (!a || (a.auth && !all)) continue;
+      a.stageDone = clamp(row[1] | 0, 0, 3); a.points = clamp(row[2] | 0, 0, 6); a.falls = Math.max(0, row[3] | 0);
+      a.hits = Math.max(0, row[4] | 0); a.knockoffs = Math.max(0, row[5] | 0); a.finished = !!row[6];
+      if (Array.isArray(row[7])) a.stageTimes = row[7].filter(Number.isFinite).slice(0, 3);
+    }
+  }
+  applySync(m, lag = 0) {
+    if (m.phase !== this.phase || m.leg !== this.leg || !Number.isFinite(m.pt) || !Number.isFinite(m.ck)) return;
+    const pt = m.pt - lag;
+    if (Math.abs(pt - this.phaseT) > 0.15) this.phaseT = Math.max(0, pt);
+    if (this.phase === 'leg' && Math.abs(m.ck + lag - this.clock) > 0.08) this.clock = m.ck + lag;
+    this.applyScores(m.st);
+  }
+  /** 나간 사람(또는 방장 교체 시 AI)의 캐릭터를 여기서 AI로 이어 받는다 */
+  takeOver(a) { a.auth = true; a.p.kind = 'bot'; a.ai = {}; a.net = null; a.inp = newInput(); if (!a.alive) a.respawnT = Math.min(a.respawnT, CFG.respawnDelay); }
 }
