@@ -88,11 +88,11 @@ export const CFG = {
   // level 1..5. 사람이 이기면 +1, 지면 -1 (저장됨)
   ai: {
     levels: [
-      { name: '순한맛', think: [1.0, 2.4], react: [0.3, 0.9], takeoffNoise: 1.1, slip: 0.3, aimErr: 3.4, windup: 0.6, fireWait: [1.1, 2.2], lead: 0.6, guns: ['basic', 'basic'], lv: 0 },
-      { name: '보통맛', think: [0.7, 1.7], react: [0.2, 0.7], takeoffNoise: 0.9, slip: 0.22, aimErr: 2.6, windup: 0.5, fireWait: [0.7, 1.6], lead: 0.75, guns: ['basic', 'rapid'], lv: 0 },
-      { name: '매콤한맛', think: [0.45, 1.2], react: [0.15, 0.5], takeoffNoise: 0.7, slip: 0.15, aimErr: 2.0, windup: 0.45, fireWait: [0.4, 1.1], lead: 0.85, guns: ['rapid', 'basic'], lv: 1 },
-      { name: '매운맛', think: [0.3, 0.8], react: [0.1, 0.35], takeoffNoise: 0.5, slip: 0.09, aimErr: 1.5, windup: 0.4, fireWait: [0.25, 0.8], lead: 0.93, guns: ['heavy', 'rapid'], lv: 1 },
-      { name: '불지옥맛', think: [0.15, 0.5], react: [0.05, 0.2], takeoffNoise: 0.35, slip: 0.05, aimErr: 1.1, windup: 0.36, fireWait: [0.1, 0.5], lead: 1, guns: ['heavy', 'rapid'], lv: 2 },
+      { name: '순한맛', think: [2.0, 4.4], react: [0.6, 1.6], takeoffNoise: 1.4, slip: 0.46, aimErr: 4.4, windup: 0.6, fireWait: [1.5, 3.0], lead: 0.6, guns: ['basic', 'basic'], lv: 0 },
+      { name: '보통맛', think: [1.6, 3.6], react: [0.45, 1.3], takeoffNoise: 1.2, slip: 0.38, aimErr: 3.3, windup: 0.5, fireWait: [1.0, 2.2], lead: 0.75, guns: ['basic', 'rapid'], lv: 0 },
+      { name: '매콤한맛', think: [1.0, 2.4], react: [0.3, 0.9], takeoffNoise: 0.95, slip: 0.26, aimErr: 2.4, windup: 0.45, fireWait: [0.6, 1.5], lead: 0.85, guns: ['rapid', 'basic'], lv: 1 },
+      { name: '매운맛', think: [0.5, 1.3], react: [0.15, 0.5], takeoffNoise: 0.65, slip: 0.14, aimErr: 1.7, windup: 0.4, fireWait: [0.35, 1.0], lead: 0.93, guns: ['heavy', 'rapid'], lv: 1 },
+      { name: '불지옥맛', think: [0.15, 0.5], react: [0.05, 0.2], takeoffNoise: 0.35, slip: 0.05, aimErr: 1.2, windup: 0.36, fireWait: [0.15, 0.6], lead: 1, guns: ['heavy', 'rapid'], lv: 2 },
     ],
     stagePressure: [0.4, 0.75, 1],   // S1은 살살, S3에서 본격 압박
   },

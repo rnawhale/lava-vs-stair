@@ -128,12 +128,15 @@ export class View {
       s.add(new THREE.HemisphereLight(0xffffff, 0x554466, 2.2));
       const d = new THREE.DirectionalLight(0xffffff, 2.4); d.position.set(2, 4, 3); s.add(d);
       this.thumbCam = new THREE.OrthographicCamera(-2.4, 2.4, 1.6, -1.6, 0.1, 50);
-      this.thumbCam.position.set(-5, 2.6, 6); this.thumbCam.lookAt(0, 0.15, 0);
+      this.thumbCam.position.set(-3, 3, 7); this.thumbCam.lookAt(0, 0, 0);
     }
     const gun = makeGun(id, level);
-    gun.position.z = -(gun.userData.muzzle - 0.3) / 2;
+    // 틀 맞춤은 Lv.0 크기 기준: 레벨 장식이 붙어도 그림 크기가 달라지지 않는다
+    const box = new THREE.Box3().setFromObject(makeGun(id, 0)), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+    gun.position.sub(c);
     const holder = new THREE.Group();
-    holder.add(gun); holder.rotation.y = -Math.PI / 2 + 0.25;
+    holder.add(gun); holder.rotation.y = -Math.PI / 2 + 0.5;
+    holder.scale.setScalar(3.3 / Math.max(size.z, size.y * 1.35));      // 세 총 모두 틀에 꽉 차게
     this.thumbScene.add(holder);
     this.thumbR.render(this.thumbScene, this.thumbCam);
     this.thumbScene.remove(holder);

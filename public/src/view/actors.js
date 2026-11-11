@@ -22,49 +22,54 @@ const part = (geo, mat, sx, sy, sz, x = 0, y = 0, z = 0) => {
 const tube = (mat, r, len, x, y, z) => { const m = part(G.cyl, mat, r, len, r, x, y, z); m.rotation.x = Math.PI / 2; return m; };
 
 // ── 물총 ────────────────────────────────────────────────
-// 총구는 +z. 레벨 표시: 총열의 빛나는 고리(레벨 수만큼) + 뒤쪽 점등 핍 + Lv.2 금색 총구·지느러미
+// 총구는 +z. 장난감 물총처럼 둥글고 통통하게.
+// 레벨 표시(실제 외형): 총열의 빛나는 고리 = 레벨 수, 뒤쪽 점등 핍 2개, Lv.2는 금색 총구 + 금색 지느러미
 export function makeGun(id, level = 0) {
   const g = new THREE.Group();
-  const white = std(0xf4f7ff, { roughness: 0.3 }), dark = std(0x2a2f3a, { roughness: 0.5, metalness: 0.4 });
-  const gold = std(0xffd24a, { roughness: 0.25, metalness: 0.8, emissive: 0x7a5200 });
-  const mark = glow(0xeaffff);
-  const tank = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.82, emissive: c, emissiveIntensity: 0.35 });
-  let muzzle = 2, ringR = 0.3, ringZ = [1.1], barrels = [0];
-  if (id === 'basic') {
-    const blue = std(0x2f8cff, { roughness: 0.35 });
-    g.add(tube(white, 0.24, 1.7, 0, 0, 0.95), part(G.box, white, 0.5, 0.62, 1.0, 0, -0.05, 0.25));
-    g.add(part(G.box, blue, 0.34, 0.75, 0.36, 0, -0.55, -0.02));              // 손잡이
-    g.add(part(G.sphere, tank(0x3fa9ff), 0.44, 0.44, 0.5, 0, 0.5, 0.15));     // 짧은 물통
-    g.add(tube(level >= 2 ? gold : blue, 0.3, 0.26, 0, 0, 1.86));
-    g.add(part(G.box, std(0xff8a3c), 0.12, 0.3, 0.12, 0, -0.38, 0.38));
-    muzzle = 2.0; ringR = 0.31; ringZ = [1.15, 1.45];
-  } else if (id === 'rapid') {
-    const green = std(0x2fd36a, { roughness: 0.35 }), lime = std(0xb6ff5a);
-    barrels = [-0.27, 0.27];
+  const white = std(0xf4f7ff, { roughness: 0.3 }), dark = std(0x2f3542, { roughness: 0.5, metalness: 0.3 });
+  const gold = std(0xffcf3a, { roughness: 0.25, metalness: 0.75, emissive: 0x8a5a00, emissiveIntensity: 0.6 });
+  const mark = glow(0x9ff6ff);
+  const tank = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.12, transparent: true, opacity: 0.78, emissive: c, emissiveIntensity: 0.45 });
+  const cap = (mat, r, len, x, y, z) => { const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 5, 14), mat); m.rotation.x = Math.PI / 2; m.position.set(x, y, z); return m; };
+  let muzzle = 2, ringR = 0.3, ringZ = [1.1], barrels = [0], top = 0.9;
+  if (id === 'basic') {                                   // 파랑·흰색의 짧은 물총
+    const blue = std(0x2f86ff, { roughness: 0.35 });
+    g.add(cap(white, 0.36, 0.9, 0, 0, 0.45), tube(white, 0.22, 0.75, 0, 0, 1.3));
+    g.add(tube(level >= 2 ? gold : blue, 0.27, 0.22, 0, 0, 1.74));
+    g.add(cap(tank(0x4db4ff), 0.3, 0.42, 0, 0.52, 0.2));                       // 짧은 물통
+    const grip = part(G.box, blue, 0.32, 0.8, 0.38, 0, -0.6, 0.02); grip.rotation.x = 0.25; g.add(grip);
+    g.add(part(G.box, std(0xff8a3c), 0.12, 0.26, 0.12, 0, -0.42, 0.42), part(G.box, blue, 0.28, 0.2, 0.5, 0, -0.34, 1.0));
+    muzzle = 1.9; ringR = 0.3; ringZ = [1.05, 1.36]; top = 0.82;
+  } else if (id === 'rapid') {                            // 초록 이중 물통, 쌍총열
+    const green = std(0x25c962, { roughness: 0.35 }), lime = std(0xc6ff5a, { emissive: 0x4a7a00, emissiveIntensity: 0.4 });
+    barrels = [-0.28, 0.28];
     for (const x of barrels) {
-      g.add(tube(dark, 0.17, 1.5, x, 0, 0.9), tube(level >= 2 ? gold : lime, 0.21, 0.2, x, 0, 1.68));
-      const t = part(G.body, tank(0x4fe07a), 0.26, 0.3, 0.26, x, 0.48, 0.1); t.rotation.x = Math.PI / 2; g.add(t);  // 이중 물통
+      g.add(tube(dark, 0.16, 1.25, x, 0, 0.95), tube(level >= 2 ? gold : lime, 0.2, 0.18, x, 0, 1.62));
+      g.add(cap(tank(0x5df08a), 0.25, 0.75, x, 0.5, 0.1));                     // 이중 물통
     }
-    g.add(part(G.box, green, 0.95, 0.5, 0.9, 0, -0.02, 0.2), part(G.box, dark, 0.32, 0.7, 0.34, 0, -0.52, 0));
-    muzzle = 1.8; ringR = 0.24; ringZ = [1.05, 1.3];
-  } else {
-    const orange = std(0xff8a2a, { roughness: 0.35 });
-    g.add(tube(dark, 0.44, 2.0, 0, 0, 1.1), part(G.box, orange, 0.9, 0.8, 1.3, 0, 0, 0.2));
-    const t = tube(tank(0xff9a3c), 0.72, 1.5, 0, 0.95, 0); g.add(t);           // 큰 탱크
-    g.add(tube(dark, 0.76, 0.14, 0, 0.95, 0.72), tube(dark, 0.76, 0.14, 0, 0.95, -0.72));
-    const bell = part(G.cone, level >= 2 ? gold : orange, 0.62, 0.5, 0.62, 0, 0, 2.2); bell.rotation.x = -Math.PI / 2; g.add(bell);
-    g.add(part(G.box, dark, 0.36, 0.8, 0.4, 0, -0.7, -0.1), part(G.box, dark, 0.3, 0.3, 0.8, 0, -0.5, 1.0));
-    muzzle = 2.5; ringR = 0.52; ringZ = [1.2, 1.6];
+    g.add(part(G.box, green, 1.0, 0.5, 0.95, 0, -0.02, 0.2), part(G.box, white, 1.04, 0.12, 0.3, 0, 0.05, 0.56));
+    const grip = part(G.box, dark, 0.32, 0.75, 0.36, 0, -0.56, 0); grip.rotation.x = 0.25; g.add(grip);
+    muzzle = 1.75; ringR = 0.22; ringZ = [0.95, 1.24]; top = 0.75;
+  } else {                                                // 주황색 큰 탱크 물대포
+    const orange = std(0xff8a2a, { roughness: 0.35 }), deep = std(0xc85a12, { roughness: 0.4 });
+    g.add(tube(dark, 0.4, 1.5, 0, 0, 1.2), part(G.box, orange, 0.92, 0.82, 1.3, 0, 0, 0.15));
+    const bell = part(G.cone, level >= 2 ? gold : orange, 0.6, 0.5, 0.6, 0, 0, 2.08); bell.rotation.x = -Math.PI / 2; g.add(bell);
+    g.add(cap(tank(0xffa23c), 0.66, 0.85, 0, 1.0, 0.05));                      // 큰 탱크
+    for (const z of [-0.4, 0.5]) { const strap = part(G.torus, deep, 0.67, 0.67, 0.67, 0, 1.0, z); strap.scale.z = 0.5; g.add(strap); }
+    const grip = part(G.box, dark, 0.36, 0.8, 0.4, 0, -0.72, -0.1); grip.rotation.x = 0.25; g.add(grip);
+    g.add(part(G.box, dark, 0.3, 0.28, 0.7, 0, -0.52, 1.0));
+    muzzle = 2.35; ringR = 0.48; ringZ = [1.1, 1.5]; top = 1.66;
   }
-  for (let i = 0; i < level; i++) for (const x of barrels) {
-    const r = part(G.torus, mark, ringR, ringR, ringR, x, 0, ringZ[i]); g.add(r);
+  for (let i = 0; i < level; i++) for (const x of barrels) g.add(part(G.torus, mark, ringR, ringR, ringR, x, 0, ringZ[i]));
+  for (let i = 0; i < 2; i++) g.add(part(G.sphere, i < level ? mark : dark, 0.12, 0.12, 0.12, -0.16 + i * 0.32, id === 'heavy' ? 0.47 : 0.3, -0.36));
+  if (level >= 2) {
+    const fin = part(G.cone, gold, 0.28, 0.6, 0.28, 0, top + 0.22, 0); fin.scale.x = 0.07; fin.geometry = FIN; g.add(fin);
   }
-  for (let i = 0; i < 2; i++) g.add(part(G.sphere, i < level ? mark : dark, 0.11, 0.11, 0.11, -0.14 + i * 0.28, id === 'heavy' ? 0.45 : 0.3, -0.32));
-  if (level >= 2) { const fin = part(G.box, gold, 0.07, 0.42, 0.6, 0, id === 'heavy' ? 1.85 : 1.0, 0); fin.rotation.x = -0.35; g.add(fin); }
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   g.userData = { id, level, muzzle };
   return g;
 }
+const FIN = new THREE.ConeGeometry(1, 1, 4);
 
 // ── 캐릭터 ──────────────────────────────────────────────
 let shadowTex;

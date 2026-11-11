@@ -76,6 +76,7 @@ button:disabled { filter: grayscale(0.8) brightness(0.7); cursor: not-allowed; }
 .gun-card .cool i { display: block; height: 100%; background: var(--water); transform-origin: left; }
 .gun-card[data-role="climb"] { opacity: 0.8; transform: scale(0.86); transform-origin: left bottom; }
 .gun-card[data-role="climb"] .cool { visibility: hidden; }
+body.touch .tower-map { top: 43%; } body.touch .stage-card { top: calc(43% - 1.2em); }
 body.touch .gun-card { bottom: auto; top: calc(74px + var(--sat)); left: auto; right: calc(10px + var(--sar)); transform-origin: right top; }
 
 .feed { position: absolute; right: calc(12px + var(--sar)); top: calc(64px + var(--sat)); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
@@ -199,6 +200,7 @@ button.act:active { transform: translateY(2px); }
 .team.win { border-color: var(--c); box-shadow: 0 0 18px color-mix(in srgb, var(--c) 40%, transparent); }
 .team-h { display: flex; justify-content: space-between; align-items: baseline; color: var(--c); font-weight: 900; margin-bottom: 0.3em; }
 .team-h .avg { font-size: 1.7em; } .team-h small { font-size: 0.45em; margin-left: 0.2em; opacity: 0.8; }
+.team tr.th td { font-size: 0.72em; opacity: 0.6; padding-bottom: 0; }
 .team table { width: 100%; border-collapse: collapse; font-size: 0.84em; font-weight: 700; } .team td { padding: 0.28em 0.15em; white-space: nowrap; } .team tr.me td { color: #fff; background: rgba(255, 255, 255, 0.08); }
 .pts i { display: inline-block; font-style: normal; font-size: 0.78em; padding: 0.05em 0.3em; margin-right: 2px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); opacity: 0.5; } .pts i.on { background: var(--lime); color: #10131a; opacity: 1; }
 .res-f { margin: 0.8em 0; font-weight: 800; line-height: 1.7; } .res-f em { color: #ffd84a; font-style: normal; } .res-f .next { opacity: 0.85; font-size: 0.9em; }
@@ -230,6 +232,7 @@ button.act:active { transform: translateY(2px); }
 }
 @media (max-height: 480px) {
   .logo { font-size: clamp(34px, 13vh, 80px); } .tagline { font-size: 1em; margin: 0; } .menu { flex-direction: row; width: min(96vw, 720px); } .menu > * { flex: 1; } .keys { display: none; }
-  .title { gap: 0.4em; } .banner { top: 14%; } .inter { top: calc(64px + var(--sat)); padding: 0.4em 0.7em 0.5em; } .inter-k { margin: 0.2em 0 0.4em; }
+  .title { gap: 0.4em; } .banner { top: 16%; } .inter { top: auto; bottom: calc(8px + var(--sab)); width: min(52vw, 440px); padding: 0.4em 0.7em 0.5em; } .inter-h b { font-size: 1.15em; display: inline; margin-right: 0.4em; } .inter-k { margin: 0.2em 0 0.4em; font-size: 0.8em; }
+  .logo-img { max-height: 34vh; margin: -0.6em 0 -0.8em; } .hint { font-size: 0.86em; }
   .tower-map { height: 34vh; } .touch .stick { width: 112px; height: 112px; } .touch .btn-jump { width: 96px; height: 96px; }
 }

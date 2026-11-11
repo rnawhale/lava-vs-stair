@@ -48,6 +48,7 @@ export class UI {
   <div class="title-foot">
     <div class="chip coins"><span class="coin"></span><b>0</b></div>
     <div class="chip ai"></div>
+    <div class="chip rec" hidden></div>
     <button class="chip opt">⚙ 설정</button>
   </div>
   <p class="keys">PC: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 이동 · <kbd>Space</kbd> 점프 · 마우스 조준/발사 &nbsp;|&nbsp; 모바일: 스틱 + 버튼</p>
@@ -80,6 +81,9 @@ export class UI {
     this.clearWorldUi(); this.closePanel(true);
     const lv = this.save.aiLevel;
     $('.title .ai', this.root).innerHTML = `🤖 AI ${esc(CFG.ai.levels[lv - 1].name)} <span class="stars">${stars(lv)}</span>`;
+    const st = this.save.stats, rec = $('.title .rec', this.root);
+    rec.hidden = !st.matches;
+    rec.textContent = `🏆 ${st.wins}승 / ${st.matches}전${st.best ? ` · 최고 ${st.best.toFixed(1)}s` : ''}`;
     this.syncCoins();
   }
   clearWorldUi() {
@@ -459,7 +463,7 @@ export class UI {
         <td>💦${a.hits}</td><td>🔥${a.falls}</td></tr>`).join('');
       return `<div class="team ${res.winner === t ? 'win' : ''}" style="--c:${teamCss(t)}">
         <div class="team-h"><b>${esc(CFG.teams[t].name)} 팀${t === mine ? ' (우리)' : ''}</b><span class="avg">${fmt(res.scores[t])}<small>점/인</small></span></div>
-        <table>${members}</table></div>`;
+        <table><tr class="th"><td></td><td>단계</td><td>점수</td><td>완주</td><td>명중</td><td>추락</td></tr>${members}</table></div>`;
     }).join('');
     const why = res.by === 'time' ? `동점! 더 빨리 오른 팀 승리 (${res.times[res.winner].toFixed(1)}s vs ${res.times[1 - res.winner].toFixed(1)}s)` : res.by === 'draw' ? '완전 동점' : '팀원당 평균 점수로 비교';
     this.openPanel('results', `
