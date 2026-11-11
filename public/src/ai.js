@@ -29,6 +29,22 @@ function chainOK(route, i, tArr, depth = 0) {
   return false;
 }
 
+/** 곧 내 쪽으로 지나갈 물줄기가 있는가. 실력(L.dodge)에 따라 물줄기마다 "봤다/못 봤다"가 한 번 정해진다. */
+function incoming(a, sim) {
+  const ai = a.ai, b = a.body, w = toWorld(b.th, b.r, b.y + 2.4);
+  ai.seen = ai.seen || {};
+  for (const s of sim.shots) {
+    if (!s.alive) continue;
+    if (ai.seen[s.id] === undefined) ai.seen[s.id] = sim.rng() < sim.lv.dodge;
+    if (!ai.seen[s.id]) continue;
+    const dx = w.x - s.x, dy = w.y - s.y, dz = w.z - s.z, v2 = s.vx * s.vx + s.vy * s.vy + s.vz * s.vz;
+    const t = (dx * s.vx + dy * s.vy + dz * s.vz) / v2;
+    if (t < 0 || t > 0.5) continue;
+    if (Math.hypot(dx - s.vx * t, dy - s.vy * t, dz - s.vz * t) < 5) return true;
+  }
+  return false;
+}
+
 export function climbAI(a, sim, dt) {
   const ai = a.ai, b = a.body, inp = a.inp, L = sim.lv, rng = sim.rng;
   const route = sim.course.route, speed = CFG.move.speed;
@@ -58,7 +74,7 @@ export function climbAI(a, sim, dt) {
   const toTakeoff = edge - ai.e;
   const tLand = tNow + Math.max(0, toTakeoff) / speed + AIR;
   const go = landable(next, tLand) && chainOK(route, i + 1, tLand);
-  const waitAt = Math.max(ai.e + 1.6, 2.6);
+  const waitAt = Math.max(ai.e + 1.6, (p.th1 - p.th0) * b.r * 0.5);
   const walkTo = (e) => { const d = edge - e; inp.fwd = d > 0.25 ? 1 : d < -0.6 ? -1 : 0; };
   const leap = (dir) => { inp.jump = true; ai.dir = dir; inp.fwd = dir; };
 
@@ -76,6 +92,7 @@ export function climbAI(a, sim, dt) {
       if ((ai.react -= dt) > 0) { walkTo(waitAt); return inp; }
       ai.committed = true; ai.react = undefined;
     } else if (!go && toTakeoff > 0.5) { ai.committed = false; return inp; }  // 창이 닫혔다: 멈춤
+    if (incoming(a, sim)) { ai.committed = false; walkTo(waitAt); return inp; }
     inp.fwd = 1;
     if (toTakeoff <= 0) leap(1);
     return inp;

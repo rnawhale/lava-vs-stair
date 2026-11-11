@@ -7,7 +7,7 @@ export function makeBody(th, r, y) {
     th, r, y, vt: 0, vr: 0, vy: 0,
     pth: th, pr: r, py: y,          // 이전 틱 위치(렌더 보간용)
     ground: null, coyote: 0, buffer: 0, airT: 0,
-    kbT: 0, kbVt: 0, kbVr: 0,       // 밀치기 채널: 조작 속도와 따로 더한다
+    kbT: 0, kbVt: 0, kbVr: 0, kb0: 0, // 밀치기 채널: 조작 속도와 따로 더한다
   };
 }
 
@@ -43,9 +43,15 @@ export function stepClimber(b, inp, course, dt, emit) {
   const g = M.gravity * (b.vy > 0 && !inp.hold ? M.jumpCutGravity : 1);
   b.vy = Math.max(b.vy - g * dt, -M.terminal);
 
-  // 밀치기: knockDuration 동안 일정 속도로 밀리고 그 뒤 빠르게 사라진다
-  if (b.kbT > 0) b.kbT -= dt;
-  else if (b.kbVt || b.kbVr) {
+  // 밀치기: 공중에서는 knockDuration 동안 그대로 날아가고, 땅에서는 마찰로 금방 멎는다.
+  // → 발을 붙이고 있으면 한 발은 버티지만, 점프 중에 맞으면 크게 밀린다(쏘는 쪽은 점프 순간을 노린다).
+  if (b.kbT > 0) {
+    b.kbT -= dt;
+    if (b.ground) {
+      const m = Math.hypot(b.kbVt, b.kbVr), k = Math.max(0, m - (b.kb0 / CFG.knockDuration) * dt) / (m || 1);
+      b.kbVt *= k; b.kbVr *= k;
+    }
+  } else if (b.kbVt || b.kbVr) {
     const f = Math.exp(-dt / 0.06);
     b.kbVt *= f; b.kbVr *= f;
     if (Math.hypot(b.kbVt, b.kbVr) < 0.4) b.kbVt = b.kbVr = 0;
@@ -121,5 +127,5 @@ export function stepLaneWalker(b, inp, course, dt) {
 
 /** 수평 밀치기. (dirT, dirR)는 대상 위치의 접선/반지름 성분(정규화). */
 export function applyKnock(b, dirT, dirR, dv) {
-  b.kbVt = dirT * dv; b.kbVr = dirR * dv; b.kbT = CFG.knockDuration;
+  b.kbVt = dirT * dv; b.kbVr = dirR * dv; b.kbT = CFG.knockDuration; b.kb0 = dv;
 }

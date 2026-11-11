@@ -444,10 +444,10 @@ export function buildWorld(scene, course) {
   // 완주 지점의 빛기둥
   const goal = course.pads[3], gw = toWorld(goal.thc, goal.r0 + CFG.padRadial / 2, goal.top);
   const beam = new THREE.Mesh(
-    new THREE.CylinderGeometry(5.5, 5.5, 120, 24, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xfff2a8, transparent: true, opacity: 0.13, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    new THREE.CylinderGeometry(2.6, 2.6, 150, 20, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff2a8, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
   );
-  beam.position.set(gw.x, gw.y + 60, gw.z);
+  beam.position.set(gw.x, gw.y + 9 + 75, gw.z);          // 머리 위에서 시작해 캐릭터를 가리지 않는다
   scene.add(beam);
 
   // 출발 게이트(카운트다운 동안 닫힘)
@@ -466,7 +466,7 @@ export function buildWorld(scene, course) {
     update(time, dt, gateClosed) {
       lava.material.uniforms.uTime.value = time;
       sky.material.uniforms.uTime.value = time;
-      beam.material.opacity = 0.11 + 0.04 * Math.sin(time * 2);
+      beam.material.opacity = 0.07 + 0.025 * Math.sin(time * 2);
       gate.material.opacity += ((gateClosed ? 0.14 + 0.05 * Math.sin(time * 6) : 0) - gate.material.opacity) * Math.min(1, dt * 8);
       gate.visible = gate.material.opacity > 0.01;
       for (const v of plats) {

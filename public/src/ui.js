@@ -240,6 +240,12 @@ export class UI {
     if (ms) this._hint = setTimeout(() => { this.hintEl.hidden = true; }, ms);
   }
   hideHint() { this.hintEl.hidden = true; }
+  /** 먼저 완주한 뒤 동료를 지켜보는 동안의 안내 */
+  setWaiting(on, fast) {
+    if (!on) { if (this._waiting) this.hideHint(); this._waiting = false; return; }
+    this._waiting = true;
+    this.hint(fast ? '🎉 완주! 동료를 기다리는 중 <b>▶▶ 빨리 감기</b>' : '🎉 완주! 동료를 응원해요', 0);
+  }
   coinFly(n) {
     const target = $('.hud .coins', this.root).getBoundingClientRect();
     for (let i = 0; i < Math.min(12, Math.ceil(n / 5) + 2); i++) {

@@ -20,7 +20,7 @@ const coarse = matchMedia('(pointer: coarse)').matches;
 let sim = null, me = null;
 let mode = 'title';          // 'title'(배경 시연) | 'match'
 let paused = false, earned = 0, bestNew = null, acc = 0, last = performance.now();
-let attractT = 0, slow = 0, speed = 1;   // speed: 검증 도구가 경기를 빨리 돌릴 때만 바꾼다
+let attractT = 0, slow = 0, wasWaiting = false, speed = 1;   // speed: 검증 도구가 경기를 빨리 돌릴 때만 바꾼다
 
 const applyQuality = () => view.setQuality(save.settings.quality === 'auto' ? (coarse ? 'low' : 'high') : save.settings.quality);
 applyQuality();
@@ -197,7 +197,7 @@ function handle(e) {
       else if (e.phase === 'leg') {
         ui.hideInter(); ui.say('<b>GO!</b>', 'go', 900); sfx.play('go');
         if (ui.panel?.name === 'shop' || ui.panel?.name === 'options') ui.closePanel();
-        if (me.role === 'shoot') tip('lead', '움직이는 상대는 <b>조금 앞</b>을 겨냥! 물줄기가 날아가는 시간이 있어요 💦', 8000);
+        if (me.role === 'shoot') tip('lead', '상대가 <b>점프하는 순간</b>을 노리세요 — 공중에서 맞으면 크게 날아가요! 움직이는 상대는 <b>조금 앞</b>을 겨냥 💦', 9000);
       } else if (e.phase === 'results') finishMatch(e.result);
       break;
     case 'stage':
@@ -210,7 +210,7 @@ function handle(e) {
       if (e.a === me && (!save.stats.best || e.time < save.stats.best)) { save.stats.best = +e.time.toFixed(2); bestNew = save.stats.best; persist(save); }
       break;
     case 'fall': if (e.a === me && sim.phase === 'leg') tip('fall', '괜찮아요! <b>2초 뒤</b> 이 단계 시작점에서 다시 도전해요. 얻은 Coins는 그대로!'); break;
-    case 'hit': if (e.a === me) tip('hit', '물총은 <b>밀치기</b>만 해요. <b>연두색 발판</b> 위는 안전 지대! 조준선이 보이면 방향을 바꿔 피하세요'); break;
+    case 'hit': if (e.a === me) tip('hit', '땅에 붙어 있으면 조금만 밀리지만 <b>점프 중에 맞으면 크게 날아가요!</b> 조준선이 보이면 점프를 참으세요. <b>연두색 발판</b>은 안전 지대', 9000); break;
   }
 }
 
@@ -248,15 +248,20 @@ function updateArrows() {
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  // 내가 먼저 완주했으면 아직 오르는 동료를 비춘다. 솔로에서는 남은 시간을 빨리 감는다.
+  const waiting = mode === 'match' && sim.phase === 'leg' && me.role === 'climb' && me.finished;
+  const watch = waiting ? sim.climbers().find((a) => !a.finished && a.alive) || me : me;
+  const ff = waiting && !online.active ? 4 : 1;
+  if (waiting !== wasWaiting) { wasWaiting = waiting; ui.setWaiting(waiting, ff > 1); }
   if (!paused) {
-    acc += dt * speed;
+    acc += dt * speed * ff;
     let n = 0;
     while (acc >= STEP && n++ < 24) { tick(); acc -= STEP; }
     if (acc > STEP) acc = 0;
   }
   if (mode === 'title' && sim.phase === 'results' && (attractT += dt) > 4) startAttract();
   const orbit = mode === 'title' || sim.phase === 'results';
-  view.render(paused ? 0 : dt, paused ? 1 : acc / STEP, me, orbit ? 'orbit' : 'play');
+  view.render(paused ? 0 : dt, paused ? 1 : acc / STEP, orbit ? me : watch, orbit ? 'orbit' : 'play');
   if (mode === 'match') { ui.frame(view, input); updateArrows(); }
   const cam = view.camera;
   sfx.setListener(cam.position, { x: cam.matrixWorld.elements[0], z: cam.matrixWorld.elements[2] });
