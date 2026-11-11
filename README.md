@@ -19,6 +19,12 @@ npm start          # → http://localhost:8787
   서버 한 대에 모두 접속해야 하므로 인터넷 너머 친구와 하려면 이 서버를 공개 주소로 띄우거나 터널을 쓴다.
 - `public/`은 정적 파일이라 아무 정적 호스팅에 올려도 AI 대전은 그대로 된다(온라인만 `server.js` 필요).
 
+## 웹 배포
+
+- AI 대전: https://rnawhale.github.io/lava-vs-stair/ — GitHub Pages에서 실행하므로 개발 PC를 꺼도 접속할 수 있다. `main`의 `public/` 변경을 push하면 자동 배포된다.
+- 친구 초대 대전: [Render 배포](https://render.com/deploy?repo=https://github.com/rnawhale/lava-vs-stair). `render.yaml`로 정적 파일과 WebSocket 서버를 함께 올린다. Render 계정 연결과 첫 배포가 필요하며, 배포 후에는 Render 주소에서 플레이한다.
+- Render 무료 서버는 15분 동안 사용하지 않으면 쉬고, 다음 접속 때 다시 켜지는 데 약 1분 걸릴 수 있다. 개발 PC의 전원과는 무관하다.
+
 ## 조작
 
 | | PC | 모바일 |
