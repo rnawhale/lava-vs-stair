@@ -102,6 +102,7 @@ let a = await info(A.page), b = await info(B.page);
 check('양쪽 모두 경기 시작', a.inMatch && b.inMatch && a.phase === 'countdown' && b.phase === 'countdown', `${a.phase}/${b.phase}`);
 check('사람은 서로 다른 팀, 캐릭터 4명', a.me.team !== b.me.team && a.actors.length === 4 && b.actors.length === 4);
 check('권한: 방장=본인+AI 2, 손님=본인만', a.actors.filter((x) => x.auth).length === 3 && b.actors.filter((x) => x.auth).length === 1);
+await click(A.page, '.ready'); await click(B.page, '.ready');
 code = await A.page.evaluate(() => window.__lvs.online.net.room);
 await C.page.waitForFunction((code) => document.querySelector(`.room-card[data-room="${code}"]`)?.disabled, code);
 check('경기가 시작되면 다른 친구의 방 목록에 게임 중·입장 제한 표시', (await C.page.locator(`.room-card[data-room="${code}"]`).innerText()).includes('게임 중'));
@@ -109,7 +110,6 @@ await click(C.page, '.sheet.hall .x');
 await A.page.waitForFunction(() => !window.__lvs.online.directory.people.some(p => p.name === '링크친구'));
 check('친구 만나기를 닫으면 접속한 친구 목록에서 사라짐', true);
 await C.browser.close();
-await click(A.page, '.ready'); await click(B.page, '.ready');
 
 // 4) 두 사람이 동시에 실제 입력으로 플레이
 let maxPosErr = 0, maxClockErr = 0, stairMismatch = 0, samples = 0, shotA = false;
