@@ -45,6 +45,7 @@ export const server = http.createServer(async (req, res) => {
 // 게임 규칙은 브라우저(방장)가 돌린다. 서버는 방 입장·인원 제한·방장 지정·시계만 맡는다.
 const rooms = new Map();        // 방 코드 → { code, title, peers, host, seq, locked }
 const visitors = new Map();     // 친구 만나기에 접속한 사람(방·경기 안에서도 같은 연결을 쓴다)
+const ROOM_MAX = CFG.teamSize * 2;
 let visitorSeq = 0;
 const send = (ws, m) => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); };
 const cast = (room, m, except) => { const s = JSON.stringify(m); for (const [id, p] of room.peers) if (id !== except && p.ws.readyState === 1) p.ws.send(s); };
@@ -118,7 +119,7 @@ if (wsLib) {
           rooms.set(code, r);
         }
         if (r.locked) return send(ws, { t: 'err', msg: '경기가 진행 중이에요. 끝난 뒤 다시 들어와 주세요' });
-        if (r.peers.size >= 4) return send(ws, { t: 'err', msg: '방이 가득 찼어요 (최대 4명)' });
+        if (r.peers.size >= ROOM_MAX) return send(ws, { t: 'err', msg: `방이 가득 찼어요 (최대 ${ROOM_MAX}명)` });
         id = 'p' + ++r.seq; room = r;
         r.peers.set(id, { ws, name });
         visitors.get(visitorId).room = code;
@@ -131,7 +132,7 @@ if (wsLib) {
       if (m.t === 'leave') { leaveRoom(); directory(); return; }
       if (m.t === 'invite') {
         const target = visitors.get(m.to);
-        const error = !room || room.locked || room.peers.size >= 4 ? '대기 중인 빈 방에서 초대해 주세요.'
+        const error = !room || room.locked || room.peers.size >= ROOM_MAX ? '대기 중인 빈 방에서 초대해 주세요.'
           : !target || target.room || m.to === visitorId ? '친구가 다른 곳으로 갔어요. 목록을 다시 확인해 주세요.'
           : now - lastInvite < CFG.online.inviteCooldownMs ? '잠깐만요! 조금 뒤에 다시 초대해 주세요.' : null;
         if (error) return send(ws, { t: 'notice', msg: error });

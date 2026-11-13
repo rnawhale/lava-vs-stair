@@ -75,7 +75,8 @@ export function climbAI(a, sim, dt) {
   const toTakeoff = edge - ai.e;
   const tLand = tNow + Math.max(0, toTakeoff) / speed + AIR;
   const go = landable(next, tLand) && chainOK(route, i + 1, tLand);
-  const waitAt = Math.max(ai.e + 1.6, (p.th1 - p.th0) * b.r * 0.5);
+  // 기다리는 자리: 발판 가운데. 넓은 체크포인트 발판에서는 팀 안 자리(slot)별로 앞뒤로 벌려 서서 서로 겹쳐 보이지 않게 한다
+  const waitAt = Math.max(ai.e + 1.6, (p.th1 - p.th0) * b.r * 0.5 + (p.kind === 'pad' ? (a.slot % 3 - 1) * 4.5 : 0));
   const walkTo = (e) => { const d = edge - e; inp.fwd = d > 0.25 ? 1 : d < -0.6 ? -1 : 0; };
   const leap = (dir) => { inp.jump = true; ai.dir = dir; inp.fwd = dir; };
 
@@ -156,7 +157,7 @@ export function shootAI(a, sim, dt) {
   if (!tb.ground) y = Math.max(tb.y - 4, tb.y + tb.vy * tHit - 0.5 * CFG.move.gravity * tHit * tHit);
   a.aim = toWorld(th, r, y + 2.4 + gauss(rng) * L.aimErr * 0.35 * k);
   a.windup = a.windupMax = L.windup;
-  const stage = Math.min(2, t.stageDone);
+  const stage = Math.min(CFG.ai.stagePressure.length - 1, t.stageDone);
   ai.wait = rand(rng, L.fireWait) / CFG.ai.stagePressure[stage];
   sim.emit('windup', { a });
   return inp;

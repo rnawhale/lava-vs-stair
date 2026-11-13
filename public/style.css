@@ -95,7 +95,7 @@ body.touch .feed { top: calc(150px + var(--sat)); }
 .say.count .num { font-size: 5em; } .say.hurry b { color: #ff5a3c; }
 @keyframes sayIn { from { transform: scale(0.4); opacity: 0; } }
 
-.hint { position: absolute; left: 50%; bottom: calc(15% + var(--sab)); transform: translateX(-50%); max-width: min(92vw, 640px); padding: 0.6em 1.1em; border-radius: 999px; background: rgba(13, 10, 18, 0.88); border: 2px solid var(--lava2);
+.hint { position: absolute; left: 50%; bottom: calc(15% + var(--sab)); transform: translateX(-50%); width: max-content; max-width: min(92vw, 640px); padding: 0.6em 1.1em; border-radius: 999px; background: rgba(13, 10, 18, 0.88); border: 2px solid var(--lava2);
   font-weight: 800; text-align: center; line-height: 1.5; animation: sayIn 0.3s; }
 body.touch .hint { bottom: auto; top: calc(128px + var(--sat)); border-radius: 18px; }
 .inter { position: absolute; left: 50%; top: calc(96px + var(--sat)); transform: translateX(-50%); width: min(92vw, 470px); padding: 0.7em 0.9em 0.8em; border-radius: var(--r); background: var(--panel); border: 2px solid var(--lava2); text-align: center; pointer-events: auto; }
@@ -220,6 +220,10 @@ button.act:active { transform: translateY(2px); }
 .slot > i { display: inline-block; width: 0.85em; height: 0.85em; border-radius: 50%; background: var(--c); margin-right: 0.45em; }
 .slot b { font-weight: 900; } .slot span { display: block; font-size: 0.78em; opacity: 0.75; margin-top: 0.15em; }
 .slot.empty { border-style: dashed; opacity: 0.55; }
+.side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.side h3 { margin: 0; font-size: 1em; font-weight: 900; color: var(--c); }
+.side .pick, .side-mine { font-size: 0.9em; }
+.side-mine { padding: 0.62em; border-radius: 16px; border: 1px dashed var(--c); color: var(--c); font-weight: 900; text-align: center; }
 .wait { flex: 1 1 100%; padding: 0.9em; border-radius: 14px; background: rgba(255, 255, 255, 0.06); font-weight: 800; text-align: center; }
 .meeting-intro { margin: 0 0 1em; line-height: 1.6; }
 .meeting-intro b { color: var(--lime); }

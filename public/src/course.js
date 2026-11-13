@@ -9,7 +9,7 @@ export const toWorld = (th, r, y, out = {}) => {
   out.x = r * Math.cos(th); out.y = y; out.z = -r * Math.sin(th);
   return out;
 };
-/** 월드 좌표 → 코스 각도. 코스가 한 바퀴 미만이라 유일하게 정해진다. */
+/** 월드 좌표 → 한 바퀴 안의 각도. 코스는 한 바퀴를 넘으므로 어느 바퀴인지는 course.unwrap(th, y)가 높이로 정한다. */
 export const angleOf = (x, z) => {
   let th = Math.atan2(-z, x);
   if (th < -0.5) th += Math.PI * 2;
@@ -111,6 +111,15 @@ export function buildCourse() {
         p.state = ph.state; p.k = ph.k; p.w = ph.w || 0;
         p.r1 = p.r0 + (p.rFull - p.r0) * ph.k;
       }
+    },
+    /** 한 바퀴 안의 각도를, 높이 y에 가장 가까운 바퀴의 코스 각도로 편다(바퀴 사이는 55 stud 넘게 떨어져 있다) */
+    unwrap(th, y) {
+      let best = th, gap = Infinity;
+      for (let t = th; t <= lane.th1; t += Math.PI * 2) {
+        const d = Math.abs(lane.yAt(t) + C.lane.drop - y);
+        if (d < gap) { gap = d; best = t; }
+      }
+      return best;
     },
     /** (th, r) 바로 아래에서 가장 높은 발판 윗면. 그림자·AI용 */
     groundBelow(th, r, y, margin = 0) {

@@ -17,6 +17,11 @@ export function mulberry32(seed) {
 
 const newInput = () => ({ fwd: 0, out: 0, jump: false, hold: false, fire: false, aim: null });
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+// 팀 안 자리(slot)별 시작 위치. 등반: [발판 중심에서 진행 방향 stud, 계단 중심 반지름에서 바깥 stud] — 셋 다 계단 폭 안이라 곧장 달려도 첫 계단에 오른다.
+const CLIMB_SPOTS = [[-2.2, -1.5], [3.4, 1.9], [-6.6, 1.9]];
+// 방해: [출발 발판 중심에서 각도, 통로 중심에서 바깥 stud]
+const SHOOT_SPOTS = [[0.1, -2], [-0.06, 1.5], [0.26, 1.5]];
+const MAX_POINTS = CFG.stages.reduce((s, st) => s + st.points, 0);
 
 export class Sim {
   /**
@@ -101,13 +106,13 @@ export class Sim {
   place(a) {
     const c = this.course;
     if (a.role === 'climb') {
-      const pad = c.pads[Math.min(a.stageDone, 3)];
-      a.body = makeBody(pad.thc + (a.slot ? 3.4 : -2.2) / RP, RP - 1.5 + a.slot * 3.4, pad.top);
+      const pad = c.pads[Math.min(a.stageDone, c.pads.length - 1)], [along, out] = CLIMB_SPOTS[a.slot % CLIMB_SPOTS.length];
+      a.body = makeBody(pad.thc + along / RP, RP + out, pad.top);
       a.body.ground = pad;
       a.safe = true;
     } else {
-      const th = c.pads[0].thc + (a.slot ? -0.06 : 0.1);
-      a.body = makeBody(th, c.lane.rc - 2 + a.slot * 3.5, c.lane.yAt(th));
+      const [dth, out] = SHOOT_SPOTS[a.slot % SHOOT_SPOTS.length], th = c.pads[0].thc + dth;
+      a.body = makeBody(th, c.lane.rc + out, c.lane.yAt(th));
     }
   }
 
@@ -192,7 +197,7 @@ export class Sim {
       for (const pad of this.course.pads) {
         if (b.th >= pad.th0 && b.th <= pad.th1 && b.r <= pad.r1 + 0.3 && b.y >= pad.top - 0.5 && b.y <= pad.top + 9) a.safe = true;
       }
-      if (b.y < CFG.lavaY + 0.5) return this.kill(a);
+      if (b.y < this.fallFloor(b.th)) return this.kill(a);
       const g = b.ground;
       if (this.phase === 'leg' && g && g.kind === 'pad' && g.padIndex === a.stageDone + 1) this.completeStage(a);
     } else if (a.role === 'shoot') {
@@ -219,9 +224,15 @@ export class Sim {
     }
   }
 
+  /** 이 높이 밑으로 떨어지면 추락. 두 바퀴째에서는 아래 바퀴 계단에 닿기 전에 끝낸다(뚫고 지나가지 않게), 그 밖에는 용암 */
+  fallFloor(th) {
+    const L = this.course.lane, below = th - Math.PI * 2;
+    return below < L.th0 ? CFG.lavaY + 0.5 : L.yAt(below) + CFG.lane.drop + CFG.fallClear;
+  }
+
   kill(a) {
     a.alive = false; a.respawnT = CFG.respawnDelay;
-    const w = toWorld(a.body.th, a.body.r, CFG.lavaY);
+    const w = toWorld(a.body.th, a.body.r, Math.max(CFG.lavaY, a.body.y));
     let by = null;
     if (this.phase === 'leg') {
       a.falls++;
@@ -303,7 +314,7 @@ export class Sim {
       const r = Math.hypot(s.x, s.z);
       if (s.y < CFG.lavaY) { this.endShot(s, 'steam'); continue; }
       if (r < CFG.towerRadius) { this.endShot(s, 'wall'); continue; }
-      const th = angleOf(s.x, s.z);
+      const th = c.unwrap(angleOf(s.x, s.z), s.y);
       let hitWorld = false;
       if (r < CFG.towerRadius + CFG.padRadial + 0.5) {
         for (const p of c.platforms) {
@@ -360,7 +371,7 @@ export class Sim {
     const ground = g >= 0 ? this.course.platforms[g] || null : g === -2 ? this.course.lane : null;
     const was = a.net ? a.net.ground : a.body.ground;
     a.net = {
-      th: clamp(th, -0.3, this.course.thEnd + 0.3), r: clamp(r, 60, 112), y: clamp(y, -6, 140),
+      th: clamp(th, -0.3, this.course.thEnd + 0.3), r: clamp(r, 60, 112), y: clamp(y, -6, this.course.pads[this.course.pads.length - 1].top + 30),
       vt: clamp(vt, -70, 70), vr: clamp(vr, -70, 70), vy: clamp(vy, -160, 80), ground, kb: !!(fl & 2), age: clamp(lag, 0, 0.25),
     };
     a.safe = !!(fl & 4);
@@ -419,7 +430,7 @@ export class Sim {
         if (!a.alive) break;
         a.alive = false; a.respawnT = 99;
         if (this.phase === 'leg') { a.falls++; if (by) by.knockoffs++; }
-        this.emit('fall', { a, x: num(m.x), y: CFG.lavaY, z: num(m.z), by, remote: true });
+        this.emit('fall', { a, x: num(m.x), y: clamp(num(m.y, CFG.lavaY), CFG.lavaY, 400), z: num(m.z), by, remote: true });
         break;
       case 'respawn':
         a.alive = true; this.place(a); a.net = null; a.protectT = CFG.respawnProtect;
@@ -460,9 +471,9 @@ export class Sim {
     for (const row of rows) {
       const a = Array.isArray(row) && this.actor(row[0]);
       if (!a || (a.auth && !all)) continue;
-      a.stageDone = clamp(row[1] | 0, 0, 3); a.points = clamp(row[2] | 0, 0, 6); a.falls = Math.max(0, row[3] | 0);
+      a.stageDone = clamp(row[1] | 0, 0, CFG.stages.length); a.points = clamp(row[2] | 0, 0, MAX_POINTS); a.falls = Math.max(0, row[3] | 0);
       a.hits = Math.max(0, row[4] | 0); a.knockoffs = Math.max(0, row[5] | 0); a.finished = !!row[6];
-      if (Array.isArray(row[7])) a.stageTimes = row[7].filter(Number.isFinite).slice(0, 3);
+      if (Array.isArray(row[7])) a.stageTimes = row[7].filter(Number.isFinite).slice(0, CFG.stages.length);
     }
   }
   applySync(m, lag = 0) {

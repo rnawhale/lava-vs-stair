@@ -1,5 +1,5 @@
 // 전체 흐름 검증(실제 Chrome + 실제 키보드·마우스 이벤트):
-//   시작 → 세 단계 등반 → 추락과 복귀 → 물총 방해 → 역할 교대 → 보상 → 구매·강화·장착 → 새로고침 후 복구
+//   시작 → AI 난이도 고르기 → 다섯 단계 등반 → 추락과 복귀 → 물총 방해 → 역할 교대 → 보상 → 구매·강화·장착 → 새로고침 후 복구
 //   + 화면 크기 변경, 상점 열기/닫기, 재시작, 연속 클릭
 //   node tools/playtest.mjs [--video]     (서버가 떠 있어야 한다: node server.js)
 import { mkdirSync } from 'node:fs';
@@ -18,6 +18,11 @@ const speed = (v) => page.evaluate((x) => { window.__lvs.speed = x; }, v);
 // 1) 시작: 로그인 없이 "바로 플레이"
 await snap('01-title');
 check('타이틀에 바로 플레이 버튼', await page.locator('.play').isVisible());
+// AI 난이도 칩: 누를 때마다 다음 난이도로 바뀌고 저장된다(다섯 번이면 제자리)
+await click(page, '.title .ai'); await sleep(200);
+check('AI 난이도 칩을 누르면 순한맛 → 보통맛', (await state(page)).save.aiLevel === 2 && (await page.locator('.title .ai').innerText()).includes('보통맛'), await page.locator('.title .ai').innerText());
+for (let i = 0; i < 4; i++) { await click(page, '.title .ai'); await sleep(150); }
+check('다섯 번 누르면 다시 순한맛', (await state(page)).save.aiLevel === 1 && (await page.locator('.title .ai').innerText()).includes('순한맛'));
 await click(page, '.play'); await sleep(700);
 let s = await state(page);
 check('버튼 한 번으로 경기 시작(카운트다운)', s.phase === 'countdown' && s.me.role === 'climb', `phase=${s.phase} role=${s.me?.role}`);
@@ -48,14 +53,14 @@ check('추락해도 완료 단계·Coins 유지', s.me.stage === 1 && s.coins ==
 
 // 3) 끝까지 등반
 await speed(2);
-await pilot(page, { maxMs: 90000, until: (r) => r.finished || r.phase !== 'leg' });
+await pilot(page, { maxMs: 130000, until: (r) => r.finished || r.phase !== 'leg' });
 s = await state(page);
-check('세 단계 완주(S1→S2→S3)', s.me.finished && s.me.points === 6, `stage=${s.me.stage} points=${s.me.points}`);
-check('완주 보상 합계 60 Coins(10/20/30, 중복 없음)', s.coins === 60, `coins=${s.coins}`);
+check('다섯 단계 완주(S1→S5, 탑을 한 바퀴 넘게)', s.me.finished && s.me.points === 15 && s.me.th > Math.PI * 2, `stage=${s.me.stage} points=${s.me.points} th=${s.me.th}`);
+check('완주 보상 합계 150 Coins(10/20/30/40/50, 중복 없음)', s.coins === 150, `coins=${s.coins}`);
 await snap('05-finish');
 // 완주 뒤 발판을 다시 밟아도 더 받지 않는다
 await page.keyboard.down('KeyA'); await sleep(200); await page.keyboard.up('KeyA'); await page.keyboard.press('Space'); await sleep(600);
-check('다시 밟아도 중복 보상 없음', (await state(page)).coins === 60);
+check('다시 밟아도 중복 보상 없음', (await state(page)).coins === 150);
 
 // 4) 역할 교대
 const t2 = Date.now();
@@ -78,7 +83,7 @@ const buyBtn = await page.locator('.gun.rapid button.buy').boundingBox();
 for (let i = 0; i < 3; i++) await page.mouse.click(buyBtn.x + buyBtn.width / 2, buyBtn.y + buyBtn.height / 2);
 await sleep(600);
 s = await state(page);
-check('연속 클릭해도 한 번만 결제(60 → 0)', s.coins === 0 && s.save.owned.rapid === true && s.save.levels.rapid === 0, `coins=${s.coins} lv=${s.save.levels.rapid}`);
+check('연속 클릭해도 한 번만 결제(150 → 90)', s.coins === 90 && s.save.owned.rapid === true && s.save.levels.rapid === 0, `coins=${s.coins} lv=${s.save.levels.rapid}`);
 check('구매한 총 자동 장착', s.save.equipped === 'rapid');
 await snap('08-bought');
 await click(page, '.sheet .x'); await sleep(300);
@@ -89,7 +94,7 @@ await click(page, '.ready');
 
 // 6) 물총 방해
 await speed(2);
-await pilot(page, { maxMs: 90000, until: (r) => r.phase === 'results' });
+await pilot(page, { maxMs: 130000, until: (r) => r.phase === 'results' });   // 한 차례 180초 = 2배속으로 90초
 await speed(1); await sleep(900);
 s = await state(page);
 check('방해 차례: 실제 마우스 조준·발사로 명중', s.me.shots > 5 && s.me.hits > 0, `shots=${s.me.shots} hits=${s.me.hits}`);
@@ -127,7 +132,7 @@ check('일시정지 동안 시간 정지', Math.abs((await state(page)).t - tp) 
 await snap('13-pause');
 await click(page, '.sheet .restart'); await sleep(600);
 s = await state(page);
-check('재시작 → 새 카운트다운, Coins 유지', s.phase === 'countdown' && s.panel === null && s.coins === 0);
+check('재시작 → 새 카운트다운, Coins 유지', s.phase === 'countdown' && s.panel === null && s.coins === 90);
 
 // 9) 두 번째 경기로 Coins를 모아 강화 (이번에는 먼저 방해)
 check('경기마다 먼저 등반하는 팀 교대', s.me.role === 'shoot', s.me.role);
@@ -138,7 +143,7 @@ await speed(1); await sleep(500); await click(page, '.ready'); await speed(2);
 await pilot(page, { maxMs: 150000, until: (r) => r.phase === 'results' });
 await speed(1); await sleep(900);
 s = await state(page);
-check('두 번째 경기 등반 보상 적립', s.coins >= 30, `coins=${s.coins}`);
+check('두 번째 경기 등반 보상 적립', s.coins >= 90 + 30, `coins=${s.coins}`);
 const coinsBefore = s.coins;
 await click(page, '.sheet .shop-open'); await sleep(350);
 const up = await page.locator('.gun.rapid button.up').boundingBox();

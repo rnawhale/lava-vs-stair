@@ -8,12 +8,15 @@ const stars = (n) => '★'.repeat(n) + `<s>${'★'.repeat(5 - n)}</s>`;
 const fmt = (n) => (Math.round(n * 10) / 10).toFixed(1);
 const teamCss = (t) => CFG.teams[t].css;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const aiChip = (lv) => `🤖 AI ${esc(CFG.ai.levels[lv - 1].name)} <span class="stars">${stars(lv)}</span>`;
+const STAGES = CFG.stages.length, ROOM_MAX = CFG.teamSize * 2;
 
 const OUCH = ['앗 뜨거!', '으아악!', '내 엉덩이!', '뜨뜨뜨!', '살려줘~', '다시 다시!'];
 const GUN_TAG = { basic: '균형 잡힌 기본기', rapid: '빠르지만 약하고 짧다', heavy: '느리지만 한 방이 세다' };
 
 export class UI {
-  /** hooks: { play, online, restart, quit, resume, pause, ready, again, volume(v), mute(), quality(q), shopChanged(), thumb(id, lv) } */
+  /** hooks: { play, online, restart, quit, resume, pause, ready, again, volume(v), mute(), quality(q), shopChanged(), thumb(id, lv),
+   *  aiLevel()(타이틀 AI 칩), team(t)·lobbyAi()(대기실 팀 고르기·AI 난이도) } */
   constructor(root, save, hooks) {
     this.root = root; this.save = save; this.h = hooks;
     root.innerHTML = `
@@ -47,7 +50,7 @@ export class UI {
   </div>
   <div class="title-foot">
     <div class="chip coins"><span class="coin"></span><b>0</b></div>
-    <div class="chip ai"></div>
+    <button class="chip ai" aria-label="AI 난이도 바꾸기" title="눌러서 AI 난이도 바꾸기"></button>
     <div class="chip rec" hidden></div>
     <button class="chip opt">⚙ 설정</button>
   </div>
@@ -66,6 +69,7 @@ export class UI {
     click('.online', () => this.h.online());
     click('.shop-open', () => this.openShop());
     click('.opt', () => this.openOptions(false));
+    click('.title .ai', () => { this.h.aiLevel(); this.syncAi(); });
     click('.pause', () => this.h.pause());
     click('.mute', () => { this.h.mute(); this.syncSound(); });
     this.modal.addEventListener('click', (e) => { if (e.target === this.modal && this.panel?.dismiss) this.closePanel(); });
@@ -75,12 +79,12 @@ export class UI {
   // ── 공통 ──
   syncCoins() { for (const b of this.root.querySelectorAll('.coins b')) b.textContent = this.save.coins; }
   syncSound() { $('.mute', this.root).textContent = this.save.settings.muted ? '🔇' : '🔊'; }
+  syncAi() { $('.title .ai', this.root).innerHTML = aiChip(this.save.aiLevel); }
   fade() { this.fadeEl.classList.remove('go'); void this.fadeEl.offsetWidth; this.fadeEl.classList.add('go'); }
   showTitle(keepPanel = false) {
     this.hud.hidden = true; this.title.hidden = false; this.cross.hidden = true; this.touch.hidden = true;
     this.clearWorldUi(); if (!keepPanel) this.closePanel(true);
-    const lv = this.save.aiLevel;
-    $('.title .ai', this.root).innerHTML = `🤖 AI ${esc(CFG.ai.levels[lv - 1].name)} <span class="stars">${stars(lv)}</span>`;
+    this.syncAi();
     const st = this.save.stats, rec = $('.title .rec', this.root);
     rec.hidden = !st.matches;
     rec.textContent = `🏆 ${st.wins}승 / ${st.matches}전${st.best ? ` · 최고 ${st.best.toFixed(1)}s` : ''}`;
@@ -98,7 +102,7 @@ export class UI {
     const track = $('.tower-map .track', this.root);
     track.innerHTML = ''; this.dots.clear();
     sim.course.pads.forEach((p, i) => {
-      const m = el(`<div class="mark"><span>${['출발', 'S1', 'S2', 'GOAL'][i]}</span></div>`);
+      const m = el(`<div class="mark"><span>${i === 0 ? '출발' : i === STAGES ? 'GOAL' : 'S' + i}</span></div>`);
       m.style.bottom = (p.thc / sim.course.thEnd) * 100 + '%'; track.append(m);
     });
     for (const a of sim.actors) {
@@ -155,14 +159,14 @@ export class UI {
     const sc = $('.stage-card', this.root);
     let html;
     if (me.role === 'climb') {
-      const st = Math.min(3, me.stageDone + 1), g = me.body.ground;
+      const st = Math.min(STAGES, me.stageDone + 1), g = me.body.ground;
       if (g) this._step = g.kind === 'step' && g.stage === st ? g.index : 0;      // 점프 중에는 마지막으로 디딘 계단 유지
-      const stepNo = me.finished ? CFG.stages[2].steps : this._step || 0;
+      const stepNo = me.finished ? CFG.stages[STAGES - 1].steps : this._step || 0;
       const n = CFG.stages[st - 1].steps;
       html = me.finished ? '<b>완주!</b><span>도착 지점에서 대기</span>'
         : `<b>S${st}</b><span class="pips">${Array.from({ length: n }, (_, i) => `<i class="${i < stepNo ? 'on' : ''}"></i>`).join('')}</span><span>${stepNo}/${n}</span>`;
     } else {
-      html = sim.climbers().map(a => `<span class="row" style="--c:${teamCss(a.p.team)}"><i></i>${esc(a.p.name)} <b>${a.finished ? '완주' : 'S' + Math.min(3, a.stageDone + 1)}</b></span>`).join('');
+      html = sim.climbers().map(a => `<span class="row" style="--c:${teamCss(a.p.team)}"><i></i>${esc(a.p.name)} <b>${a.finished ? '완주' : 'S' + Math.min(STAGES, a.stageDone + 1)}</b></span>`).join('');
     }
     if (this._sc !== html) { this._sc = html; sc.innerHTML = html; }
     // 재사용 대기
@@ -266,8 +270,8 @@ export class UI {
     switch (e.type) {
       case 'count': this.say(`<b class="num">${e.n}</b>`, 'count', 900); break;
       case 'stage': {
-        const last = e.stage === 3;
-        if (mine) this.say(`<b>${last ? '완주!' : `S${e.stage} 완료!`}</b><span class="rw"><i class="coin"></i>+${e.reward}</span>${last ? '<small>전체 완주 · 이번 등반 합계 60 Coins</small>' : `<small>체크포인트 열림 · ${e.points}점</small>`}`, 'stage', 2200);
+        const last = e.stage === STAGES;
+        if (mine) this.say(`<b>${last ? '완주!' : `S${e.stage} 완료!`}</b><span class="rw"><i class="coin"></i>+${e.reward}</span>${last ? `<small>전체 완주 · 이번 등반 합계 ${CFG.stages.reduce((s, x) => s + x.reward, 0)} Coins</small>` : `<small>체크포인트 열림 · ${e.points}점</small>`}`, 'stage', 2200);
         else this.note(`<i style="background:${teamCss(e.a.p.team)}"></i>${esc(e.a.p.name)} <b>${last ? '완주!' : `S${e.stage} 통과`}</b>`);
         break;
       }
@@ -309,9 +313,11 @@ export class UI {
 
   // ── 모달 ──
   openPanel(name, html, dismiss = true) {
+    const fresh = this.panel?.name !== name;
     this.panel = { name, dismiss };
     this.sheet.className = 'sheet ' + name;
     this.sheet.innerHTML = html;
+    if (fresh) this.sheet.scrollTop = 0;   // 앞 화면에서 내린 스크롤을 물려받지 않는다(대기실 맨 위의 팀 고르기가 가려진다). 같은 화면을 다시 그릴 때는 그대로 둔다
     this.modal.hidden = false;
     this.h.panel?.(name, true);
   }
@@ -398,7 +404,7 @@ export class UI {
     }).join('');
     this.sheet.innerHTML = `
       <header><h2>🔫 물총 상점</h2><div class="chip coins"><span class="coin"></span><b>${s.coins}</b></div><button class="x" aria-label="닫기">✕</button></header>
-      <p class="shop-note">Coins는 등반에서 단계를 처음 끝낼 때 얻어요 (S1 10 · S2 20 · S3 30). 장착·강화는 <b>다음 차례</b>부터 적용됩니다.</p>
+      <p class="shop-note">Coins는 등반에서 단계를 처음 끝낼 때 얻어요 (${CFG.stages.map((x, i) => `S${i + 1} ${x.reward}`).join(' · ')}). 장착·강화는 <b>다음 차례</b>부터 적용됩니다.</p>
       <div class="guns">${cards}</div>`;
     $('.x', this.sheet).onclick = () => { this.h.click?.(); this.closePanel(); };
     for (const b of this.sheet.querySelectorAll('button.act')) b.onclick = () => this.trade(b.dataset.act, b.dataset.id, +b.dataset.lv);
@@ -466,13 +472,13 @@ export class UI {
   onlineMessage(msg) { const p = $('[data-online-message]', this.sheet); if (p) p.textContent = msg; }
   refreshDirectory(v) {
     if (!['hall', 'lobby'].includes(this.panel?.name)) return;
-    const joinable = (r) => r && !r.locked && r.count < 4;
+    const joinable = (r) => r && !r.locked && r.count < ROOM_MAX;
     const findRoom = (code) => v.rooms.find((r) => r.code === code);
     const rooms = $('.room-list', this.sheet);
     if (rooms) {
       rooms.innerHTML = v.rooms.map((r) => `<button class="room-card" data-room="${esc(r.code)}" data-unavailable="${!joinable(r)}" ${!joinable(r) || this.onlineBusy ? 'disabled' : ''}>
         <span class="room-icon">${r.locked ? '🎮' : '🚪'}</span><span class="room-info"><b>${esc(r.title)}</b><small>${r.names.map(esc).join(' · ')}</small></span>
-        <span class="room-state">${r.count}/4명<small>${r.locked ? '게임 중' : r.count >= 4 ? '가득 참' : '들어가기 →'}</small></span></button>`).join('')
+        <span class="room-state">${r.count}/${ROOM_MAX}명<small>${r.locked ? '게임 중' : r.count >= ROOM_MAX ? '가득 참' : '들어가기 →'}</small></span></button>`).join('')
         || '<p class="meeting-empty">아직 방이 없어요.<br>첫 번째 방을 만들어 볼까요?</p>';
     }
     const people = $('.people-list', this.sheet);
@@ -503,12 +509,20 @@ export class UI {
   openLobby(v) {
     const slot = (p) => `<div class="slot" style="--c:${teamCss(p.team)}"><i></i><b>${p.kind === 'bot' ? '<i class="ai">AI</i>' : ''}${esc(p.name)}</b>
       <span>${CFG.teams[p.team].name} 팀${p.me ? ' · 나' : ''}${p.host ? ' · 방장' : ''}</span></div>`;
-    const humans = v.players.filter(p => p.kind === 'human').length;
+    const humans = v.players.filter(p => p.kind === 'human').length, mine = v.players.find((p) => p.me)?.team;
+    // 팀별 칸: 내 팀이 아닌 쪽의 버튼을 누르면 그 팀으로 옮긴다(같은 팀이면 함께 AI와, 다른 팀이면 서로 겨룬다)
+    const side = (t) => {
+      const members = v.players.filter((p) => p.team === t), full = members.filter((p) => p.kind === 'human').length >= CFG.teamSize;
+      return `<section class="side" style="--c:${teamCss(t)}"><h3>${CFG.teams[t].name} 팀</h3>
+        ${members.map(slot).join('')}${'<div class="slot empty"><b>빈 자리</b><span>초대를 기다리는 중…</span></div>'.repeat(Math.max(0, CFG.teamSize - members.length))}
+        ${t === mine ? '<div class="side-mine">✓ 내 팀</div>' : `<button class="mid go pick" data-team="${t}" ${full ? 'disabled' : ''}>${full ? '가득 찼어요' : `${CFG.teams[t].name} 팀으로 옮기기`}</button>`}</section>`;
+    };
     this.openPanel('lobby', `
       <header><h2>🚪 ${esc(v.title)}</h2><button class="x" aria-label="방 목록으로">✕</button></header>
-      <p class="shop-note">${humans}/4명 · 친구 이름 옆의 <b>초대</b>를 눌러 함께해요. 빈 자리는 AI가 채울 수 있어요.</p>
-      <div class="slots">${v.players.map(slot).join('')}${v.players.length < 4 ? '<div class="slot empty"><b>빈 자리</b><span>초대를 기다리는 중…</span></div>'.repeat(4 - v.players.length) : ''}</div>
+      <p class="shop-note">${humans}/${ROOM_MAX}명 · <b>팀을 골라요.</b> 같은 팀이면 함께 AI와, 다른 팀이면 서로 겨뤄요. 빈 자리는 AI가 채울 수 있어요.</p>
+      <div class="slots">${side(0)}${side(1)}</div>
       ${v.isHost ? `<label class="row">빈 자리를 AI로 채우기 <input type="checkbox" class="fillc" ${v.fill ? 'checked' : ''}></label>` : ''}
+      ${v.fill ? `<div class="row">AI 난이도 ${v.isHost ? `<button class="chip ai-pick" aria-label="AI 난이도 바꾸기">${aiChip(v.ai)}</button>` : `<span class="chip">${aiChip(v.ai)}</span>`}</div>` : ''}
       <div class="res-b">
         ${v.isHost ? `<button class="big start" ${v.canStart ? '' : 'disabled'}>경기 시작 ▶${v.canStart ? '' : '<small>양 팀에 한 명 이상 필요해요</small>'}</button>` : '<div class="wait">방장이 시작하면 경기가 열려요…</div>'}
         <button class="mid shop-open">🔫 상점</button>
@@ -523,9 +537,12 @@ export class UI {
       e.currentTarget.textContent = '복사됨 ✓';
     };
     $('.shop-open', this.sheet).onclick = () => { this.h.click?.(); this.lobbyBack = true; this.openShop(); };
+    for (const b of this.sheet.querySelectorAll('.pick')) b.onclick = () => { this.h.click?.(); this.h.team(+b.dataset.team); };
     if (v.isHost) {
       $('.fillc', this.sheet).onchange = (e) => this.h.fill(e.target.checked);
       $('.start', this.sheet).onclick = () => { this.h.click?.(); this.h.startOnline(); };
+      const ai = $('.ai-pick', this.sheet);
+      if (ai) ai.onclick = () => { this.h.click?.(); this.h.lobbyAi(); };
     }
     this.refreshDirectory(v.directory);
   }
@@ -537,8 +554,8 @@ export class UI {
     const rows = [0, 1].map((t) => {
       const members = sim.team(t).map((a) => `
         <tr class="${a.p.local ? 'me' : ''}"><td>${a.p.kind === 'bot' ? '<i class="ai">AI</i>' : ''}${esc(a.p.local ? '나' : a.p.name)}</td>
-        <td class="pts">${[1, 2, 3].map(k => `<i class="${a.stageTimes.length >= k ? 'on' : ''}">S${k}</i>`).join('')}</td>
-        <td><b>${a.points}</b>점</td><td>${a.stageTimes.length === 3 ? a.stageTimes[2].toFixed(1) + 's' : '-'}</td>
+        <td class="pts">${CFG.stages.map((_, k) => `<i class="${a.stageTimes.length > k ? 'on' : ''}">${k + 1}</i>`).join('')}</td>
+        <td><b>${a.points}</b>점</td><td>${a.stageTimes.length === STAGES ? a.stageTimes[STAGES - 1].toFixed(1) + 's' : '-'}</td>
         <td>💦${a.hits}</td><td>🔥${a.falls}</td></tr>`).join('');
       return `<div class="team ${res.winner === t ? 'win' : ''}" style="--c:${teamCss(t)}">
         <div class="team-h"><b>${esc(CFG.teams[t].name)} 팀${t === mine ? ' (우리)' : ''}</b><span class="avg">${fmt(res.scores[t])}<small>점/인</small></span></div>

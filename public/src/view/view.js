@@ -78,7 +78,12 @@ export class View {
       case 'jump': if (v) fx.dust(v.pos.x, v.pos.y, v.pos.z, 0.25); break;
       case 'land': if (v) { v.land(e.v); fx.dust(v.pos.x, v.pos.y, v.pos.z, Math.min(1.4, e.v / 70)); } break;
       case 'ledge': if (v) { v.land(40); fx.dust(v.pos.x, v.pos.y, v.pos.z, 0.5); } break;
-      case 'fall': if (v) { v.die(e.x, e.y, e.z); fx.lavaBurst(e.x, e.y, e.z); if (e.a.p.local) this.cam.shake = 0.5; } break;
+      case 'fall': if (v) {
+        const air = e.y > CFG.lavaY + 3;                 // 두 바퀴째에서 떨어짐: 용암에 닿기 전에 공중에서 펑
+        v.die(e.x, e.y, e.z, air);
+        if (!air) fx.lavaBurst(e.x, e.y, e.z);
+        if (e.a.p.local) this.cam.shake = 0.5;
+      } break;
       case 'respawn': if (v) { v.onRespawn(); const w = toWorld(e.a.body.th, e.a.body.r, e.a.body.y); fx.sparkle(w.x, w.y, w.z, 0xb6ff8a); } break;
       case 'stage': if (v) fx.confetti(v.pos.x, v.pos.y, v.pos.z, e.a.p.local ? 60 : 26); break;
       case 'shot': if (v) v.onFire(); break;
@@ -154,14 +159,15 @@ export class View {
     const c = this.cam, cam = this.camera;
     let tth, tr, ty, lx, ly, lz, kT = 9, kR = 5, kY = 5;
     if (mode === 'orbit' || !local) {
-      tth = this.time * 0.07 + 1.2; tr = 190; ty = 78;
-      lx = 0; ly = 40; lz = 0; kT = kR = kY = 2;
+      const pads = this.sim.course.pads, top = pads[pads.length - 1].top;   // 코스 높이에 맞춰 나선 전체가 들어오게
+      tth = this.time * 0.07 + 1.2; tr = 150 + top * 0.7; ty = top * 0.9;
+      lx = 0; ly = top * 0.5; lz = 0; kT = kR = kY = 2;
     } else {
       const v = this.views.get(local.id), b = local.body;
       let th = b.pth + (b.th - b.pth) * this.alpha, r = b.pr + (b.r - b.pr) * this.alpha, y = b.py + (b.y - b.py) * this.alpha;
       if (local.role === 'climb' && !local.alive && !(v?.death && v.death.t < 1.05)) {
         // 용암 연출이 끝나면 다시 나타날 발판으로 미리 미끄러져 간다(복귀 순간 화면이 튀지 않게)
-        const pad = this.sim.course.pads[Math.min(local.stageDone, 3)];
+        const pads = this.sim.course.pads, pad = pads[Math.min(local.stageDone, pads.length - 1)];
         th = pad.thc; r = RP; y = pad.top;
         c.focusY = lerp(c.focusY, y, damp(6, dt));
       }
@@ -201,7 +207,9 @@ export class View {
     const sim = this.sim;
     if (!sim) return;
     this.time += dt; this.alpha = alpha;
-    this.world.update(this.time, dt, sim.phase === 'countdown' || sim.phase === 'switch');
+    const c = this.cam, wide = mode === 'orbit' || !local;
+    this.world.update(this.time, dt, sim.phase === 'countdown' || sim.phase === 'switch',
+      (p) => Math.cos(p.thc - c.th) > 0 && (wide || Math.abs(p.top - c.ly) < 30));
     for (const v of this.views.values()) v.update(dt, this.time, alpha, sim.course, this.fx);
     this.updateCamera(dt, local, mode);
     // 캐릭터가 카메라에 너무 가까우면 숨겨서 화면을 막지 않게 한다

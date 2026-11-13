@@ -80,8 +80,12 @@ function stoneBase(g, w, h, tone = 30) {
   }
 }
 
-/** 발판 윗면: [바탕, 발광 무늬]. u=진행 방향, v=벽(0)→바깥(1) */
-function topTextures(kind, label) {
+const padLabel = (course, i) => (i === 0 ? 'START' : i === course.pads.length - 1 ? 'GOAL' : `S${i + 1}`);
+
+/** 발판 윗면: [바탕, 발광 무늬]. u=진행 방향, v=벽(0)→바깥(1). 같은 무늬는 한 번만 그려 함께 쓴다. */
+const topCache = {};
+const topTextures = (kind, label) => topCache[kind + label] || (topCache[kind + label] = drawTop(kind, label));
+function drawTop(kind, label) {
   const S = kind === 'pad' ? 512 : 256;
   const pattern = (g, glow) => {
     const m = S * 0.07;
@@ -250,10 +254,9 @@ function makeBackdrop() {
 }
 
 // ── 발판 ────────────────────────────────────────────────
-function makePlatform(p) {
+function makePlatform(p, label) {
   const kind = p.kind === 'pad' ? 'pad' : p.moving ? 'moving' : 'fixed';
   const color = COLORS[kind];
-  const label = p.kind === 'pad' ? ['START', 'S2', 'S3', 'GOAL'][p.padIndex] : '';
   const [map, emis] = topTextures(kind, label);
   const [bmap, bemis] = bandTextures();
   const top = new THREE.MeshStandardMaterial({ map, emissiveMap: emis, emissive: color, emissiveIntensity: kind === 'pad' ? 0.55 : 0.9, roughness: 0.85, metalness: 0.05 });
@@ -320,11 +323,11 @@ function makeFlag(label, color) {
 // ── 사격 통로 ────────────────────────────────────────────
 function makeLane(course) {
   const L = course.lane, group = new THREE.Group();
-  const SEG = 150, pos = [], nor = [], uv = [], idx = [];
+  const SEG = Math.ceil((L.th1 - L.th0) / 0.04), pos = [], nor = [], uv = [], idx = [];
   const T = 1.2;
   // 단면 꼭짓점: 윗면 안/밖, 아랫면 안/밖 — 높이가 변하므로 직접 만든다
   for (let i = 0; i <= SEG; i++) {
-    const th = L.th0 + (L.th1 - L.th0) * i / SEG, y = L.yAt(th), c = Math.cos(th), s = -Math.sin(th), u = i / SEG * 60;
+    const th = L.th0 + (L.th1 - L.th0) * i / SEG, y = L.yAt(th), c = Math.cos(th), s = -Math.sin(th), u = (th - L.th0) * 10;
     const ring = [[L.r0, y, 0, 1, 0, 0], [L.r1, y, 0, 1, 0, 1], [L.r1, y, 1, 0, 0, 1], [L.r1, y - T, 1, 0, 0, 0.8], [L.r1, y - T, 0, -1, 0, 1], [L.r0, y - T, 0, -1, 0, 0], [L.r0, y - T, -1, 0, 0, 0.8], [L.r0, y, -1, 0, 0, 1]];
     for (const [r, yy, nr, ny, , v] of ring) { pos.push(r * c, yy, r * s); nor.push(nr * c, ny, nr * s); uv.push(u, v); }
     if (i < SEG) for (let f = 0; f < 4; f++) { const a = i * 8 + f * 2, b = a + 8; idx.push(a, b, a + 1, a + 1, b, b + 1); }
@@ -357,16 +360,20 @@ function makeLane(course) {
   }
   const postGeo = new THREE.CylinderGeometry(0.16, 0.16, 1, 6), pillarGeo = new THREE.CylinderGeometry(1.5, 2.1, 1, 10);
   const n = Math.ceil((L.th1 - L.th0) / 0.09);
+  const posts = new THREE.InstancedMesh(postGeo, postMat, (n + 1) * 2), M = new THREE.Matrix4();   // 난간 기둥 수백 개를 한 번에 그린다
+  group.add(posts);
   for (let i = 0; i <= n; i++) {
     const th = L.th0 + (L.th1 - L.th0) * i / n, y = L.yAt(th);
-    for (const [r, h] of [[L.r0 + 0.3, 1.3], [L.r1 - 0.3, 2.6]]) {
-      const w = toWorld(th, r, y + h / 2), m = new THREE.Mesh(postGeo, postMat);
-      m.position.set(w.x, w.y, w.z); m.scale.y = h; group.add(m);
-    }
+    [[L.r0 + 0.3, 1.3], [L.r1 - 0.3, 2.6]].forEach(([r, h], k) => {
+      const w = toWorld(th, r, y + h / 2);
+      posts.setMatrixAt(i * 2 + k, M.makeScale(1, h, 1).setPosition(w.x, w.y, w.z));
+    });
     if (i % 4 === 0) {
-      const w = toWorld(th, L.rc, 0), h = y - T - CFG.lavaY + 3;
-      const m = new THREE.Mesh(pillarGeo, postMat);
-      m.position.set(w.x, CFG.lavaY - 3 + h / 2, w.z); m.scale.y = h; group.add(m);
+      // 두 바퀴째는 아래 바퀴 통로 위를 지나므로 용암까지 기둥을 내리지 않고(통로 한가운데를 막는다) 짧은 부양 장치만 단다
+      const upper = th - Math.PI * 2 >= L.th0;
+      const w = toWorld(th, L.rc, 0), h = upper ? 2.2 : y - T - CFG.lavaY + 3;
+      const m = new THREE.Mesh(pillarGeo, upper ? railMat : postMat);
+      m.position.set(w.x, y - T - h / 2, w.z); m.scale.y = h; group.add(m);
     }
   }
   return group;
@@ -432,17 +439,17 @@ export function buildWorld(scene, course) {
   skirt.position.y = CFG.lavaY + 8;
   scene.add(skirt);
 
-  const plats = course.platforms.map(makePlatform);
+  const plats = course.platforms.map((p) => makePlatform(p, p.kind === 'pad' ? padLabel(course, p.padIndex) : ''));
   for (const v of plats) scene.add(v.group);
   const flags = [];
   course.pads.forEach((p, i) => {
-    const f = makeFlag(['START', 'S2', 'S3', 'GOAL'][i], COLORS.pad);
+    const f = makeFlag(padLabel(course, i), COLORS.pad);
     const w = toWorld(p.thc, CFG.towerRadius, p.top);
     f.position.set(w.x, w.y, w.z); f.rotation.y = p.thc;
     scene.add(f); flags.push(f);
   });
   // 완주 지점의 빛기둥
-  const goal = course.pads[3], gw = toWorld(goal.thc, goal.r0 + CFG.padRadial / 2, goal.top);
+  const goal = course.pads[course.pads.length - 1], gw = toWorld(goal.thc, goal.r0 + CFG.padRadial / 2, goal.top);
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(2.6, 2.6, 150, 20, 1, true),
     new THREE.MeshBasicMaterial({ color: 0xfff2a8, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
@@ -462,8 +469,8 @@ export function buildWorld(scene, course) {
 
   return {
     moon, plats, gate, flags,
-    /** 매 프레임: 계단 위치·경고 연출·셰이더 시간 */
-    update(time, dt, gateClosed) {
+    /** 매 프레임: 계단 위치·경고 연출·셰이더 시간. inView(p): 그 발판이 지금 화면이 비추는 쪽(같은 편·같은 바퀴)에 있는가 */
+    update(time, dt, gateClosed, inView) {
       lava.material.uniforms.uTime.value = time;
       sky.material.uniforms.uTime.value = time;
       beam.material.opacity = 0.07 + 0.025 * Math.sin(time * 2);
@@ -488,7 +495,7 @@ export function buildWorld(scene, course) {
         }
         v.mesh.position.set(-depth + jx, jy, 0);
         v.mesh.visible = p.k > 0.01;
-        v.warnIcon.visible = warn;
+        v.warnIcon.visible = warn && inView(p);   // 표식은 가려지지 않게 그리므로, 탑 반대편·다른 바퀴 계단 것은 숨긴다
         if (warn) { const s = 3 + Math.sin(time * 30) * 0.5; v.warnIcon.scale.set(s, s, 1); }
         // 문틀 빛: 곧 나올 때 밝아진다
         const soon = p.state === 'hidden' || p.state === 'ext';

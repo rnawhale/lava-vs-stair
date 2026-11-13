@@ -89,19 +89,46 @@ check('기존 초대 링크에서도 입장 가능', await C.page.evaluate(() =>
 await click(C.page, '.sheet.lobby .x');
 await C.page.waitForSelector('.sheet.hall');
 await sleep(500);
-const slotsA = await A.page.locator('.slot').allInnerTexts(), slotsB = await B.page.locator('.slot').allInnerTexts();
-check('두 화면의 대기실 명단이 같다(사람 2 + AI 2)', slotsA.length === 4 && JSON.stringify(slotsA) .replace(/ · 나/g, '') === JSON.stringify(slotsB).replace(/ · 나/g, ''), slotsA.join(' / ').replace(/\n/g, ' '));
+const slots = async () => { const [x, y] = await Promise.all([A.page.locator('.slot').allInnerTexts(), B.page.locator('.slot').allInnerTexts()]); return [x, JSON.stringify(x).replace(/ · 나/g, '') === JSON.stringify(y).replace(/ · 나/g, '')]; };
+const humanTeams = (page) => page.evaluate(() => window.__lvs.online.roster().filter((p) => p.kind === 'human').map((p) => p.team).join(''));
+let [slotsA, same] = await slots();
+check('두 화면의 대기실 명단이 같다(사람 2 + AI 4, 3대3)', slotsA.length === 6 && same, slotsA.join(' / ').replace(/\n/g, ' '));
 check('손님 화면에는 시작 버튼 대신 대기 안내', (await B.page.locator('.start').count()) === 0 && (await B.page.locator('.wait').count()) === 1);
 await B.page.screenshot({ path: `${OUT}/02-lobby-guest.png` });
 await A.page.screenshot({ path: `${OUT}/01-lobby-host.png` });
+
+// 2-1) 팀 고르기: 손님이 방장과 같은 팀으로 옮겼다가 돌아온다. 방장은 AI 난이도를 바꾼다
+await click(B.page, '.pick');
+await A.page.waitForFunction(() => window.__lvs.online.roster().filter((p) => p.kind === 'human').every((p) => p.team === 0));
+await sleep(300);
+[slotsA, same] = await slots();
+check('손님이 민트 팀으로 옮기면 두 화면 모두 같은 팀(상대는 AI 셋)', (await humanTeams(A.page)) === '00' && (await humanTeams(B.page)) === '00' && same
+  && await A.page.evaluate(() => window.__lvs.online.roster().filter((p) => p.team === 1).every((p) => p.kind === 'bot')), slotsA.join(' / ').replace(/\n/g, ' '));
+await B.page.setViewportSize({ width: 390, height: 844 }); await sleep(300);
+check('휴대폰 너비에서 팀 고르기 대기실이 가로로 넘치지 않음', await B.page.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollWidth <= s.clientWidth + 1; }));
+await B.page.screenshot({ path: `${OUT}/02-lobby-same-team-mobile.png` });
+await B.page.setViewportSize({ width: 1280, height: 720 }); await sleep(300);
+await A.page.screenshot({ path: `${OUT}/01-lobby-same-team-host.png` });
+await B.page.locator('.pick').scrollIntoViewIfNeeded();
+await click(B.page, '.pick');
+await A.page.waitForFunction(() => window.__lvs.online.roster().filter((p) => p.kind === 'human').map((p) => p.team).join('') === '01');
+await sleep(300);
+check('다시 핑크 팀으로 옮기면 서로 다른 팀', (await humanTeams(B.page)) === '01' && (await slots())[1]);
+check('손님 화면에는 AI 난이도 버튼이 없음(방장만 변경)', (await B.page.locator('.ai-pick').count()) === 0);
+const ai0 = await A.page.evaluate(() => window.__lvs.online.aiLevel);
+await A.page.locator('.ai-pick').scrollIntoViewIfNeeded();
+await click(A.page, '.ai-pick');
+await B.page.waitForFunction((v) => window.__lvs.online.aiLevel === v, ai0 % 5 + 1);
+check('방장이 AI 난이도를 바꾸면 손님 화면에도 반영', await A.page.evaluate(() => window.__lvs.online.aiLevel) === ai0 % 5 + 1 && (await slots())[1]);
+await A.page.locator('.start').scrollIntoViewIfNeeded();
 
 // 3) 방장이 시작 → 두 화면 모두 경기 진입
 await click(A.page, '.start');
 await sleep(1200);
 let a = await info(A.page), b = await info(B.page);
 check('양쪽 모두 경기 시작', a.inMatch && b.inMatch && a.phase === 'countdown' && b.phase === 'countdown', `${a.phase}/${b.phase}`);
-check('사람은 서로 다른 팀, 캐릭터 4명', a.me.team !== b.me.team && a.actors.length === 4 && b.actors.length === 4);
-check('권한: 방장=본인+AI 2, 손님=본인만', a.actors.filter((x) => x.auth).length === 3 && b.actors.filter((x) => x.auth).length === 1);
+check('사람은 서로 다른 팀, 캐릭터 6명(3대3)', a.me.team !== b.me.team && a.actors.length === 6 && b.actors.length === 6);
+check('권한: 방장=본인+AI 4, 손님=본인만', a.actors.filter((x) => x.auth).length === 5 && b.actors.filter((x) => x.auth).length === 1);
 await click(A.page, '.ready'); await click(B.page, '.ready');
 code = await A.page.evaluate(() => window.__lvs.online.net.room);
 await C.page.waitForFunction((code) => document.querySelector(`.room-card[data-room="${code}"]`)?.disabled, code);
@@ -129,12 +156,12 @@ let n = 0;
 const until = async (r) => { if (++n % 40 === 0) await sample(); return r.phase === 'results'; };
 const snapAt = { 300: 'leg', 2500: 'leg-b' };
 await Promise.all([
-  pilot(A.page, { maxMs: 290000, until: async (r) => {
+  pilot(A.page, { maxMs: 450000, until: async (r) => {
     if (snapAt[n]) { const k = snapAt[n]; delete snapAt[n]; await A.page.screenshot({ path: `${OUT}/03-${k}-host.png` }); await B.page.screenshot({ path: `${OUT}/03-${k}-guest.png` }); }
     if (r.phase === 'switch' && !shotA) { shotA = true; await sleep(300); await A.page.screenshot({ path: `${OUT}/04-switch-host.png` }); await click(A.page, '.ready').catch(() => {}); }
     return until(r);
   } }),
-  (async () => { let sw = false; await pilot(B.page, { maxMs: 290000, until: async (r) => { if (r.phase === 'switch' && !sw) { sw = true; await sleep(500); await click(B.page, '.ready').catch(() => {}); } return r.phase === 'results'; } }); })(),
+  (async () => { let sw = false; await pilot(B.page, { maxMs: 450000, until: async (r) => { if (r.phase === 'switch' && !sw) { sw = true; await sleep(500); await click(B.page, '.ready').catch(() => {}); } return r.phase === 'results'; } }); })(),
 ]);
 await sleep(1500);
 a = await info(A.page); b = await info(B.page);
@@ -160,7 +187,7 @@ check('두 번째 경기 시작(먼저 등반하는 팀 교대)', a.phase === 'c
 await A.browser.close();
 await sleep(1500);
 b = await info(B.page);
-check('방장 이탈 → 손님이 방장 승계, 모든 캐릭터 인수', b.host && b.actors.every((q) => q.auth), `host=${b.host} auth=${b.actors.filter((q) => q.auth).length}/4`);
+check('방장 이탈 → 손님이 방장 승계, 모든 캐릭터 인수', b.host && b.actors.every((q) => q.auth), `host=${b.host} auth=${b.actors.filter((q) => q.auth).length}/6`);
 const pt0 = b.pt; await sleep(1200);
 check('승계 뒤에도 경기 진행', (await info(B.page)).pt !== pt0);
 

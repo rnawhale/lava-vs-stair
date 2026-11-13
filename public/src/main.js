@@ -48,6 +48,9 @@ const ui = new UI(document.getElementById('ui'), save, {
   },
   leaveRoom: () => leaveRoom(),
   fill: (v) => online.setFill(v),
+  team: (t) => online.setTeam(t),
+  lobbyAi: () => online.setAi(online.aiLevel % CFG.ai.levels.length + 1),
+  aiLevel: () => { save.aiLevel = save.aiLevel % CFG.ai.levels.length + 1; persist(save); },   // 타이틀의 AI 칩: 누를 때마다 다음 난이도
   startOnline: () => online.start(),
   pause: () => openPause(),
   resume: () => ui.closePanel(),
@@ -112,7 +115,7 @@ function directoryView() {
   return { ...online.directory, me: online.net?.visitorId, name: online.net?.name || save.name, room: online.net?.room };
 }
 function lobbyView() {
-  return { room: online.net.room, title: online.net.title, link: online.link, directory: directoryView(), isHost: online.isHost, fill: online.fill, canStart: online.canStart(),
+  return { room: online.net.room, title: online.net.title, link: online.link, directory: directoryView(), isHost: online.isHost, fill: online.fill, ai: online.aiLevel, canStart: online.canStart(),
     players: online.roster().map((p) => ({ ...p, me: p.id === online.id, host: p.id === online.net.hostId })) };
 }
 async function joinRoom(room, title) {
@@ -120,7 +123,7 @@ async function joinRoom(room, title) {
   joining = true; ui.setOnlineBusy(true); ui.onlineMessage('방에 들어가는 중…');
   const net = online.net;
   try {
-    await online.join(room, loadoutOf(save), title);
+    await online.join(room, loadoutOf(save), title, save.aiLevel);
     if (online.net !== net) return false;
     roomParam = net.room;
     history.replaceState(null, '', '?room=' + roomParam);
@@ -144,7 +147,7 @@ const shuffled = (xs) => xs.map(x => [Math.random(), x]).sort((a, b) => a[0] - b
 
 function startAttract(keepPanel = false) {
   const names = shuffled(CFG.botNames);
-  sim = new Sim([0, 1, 2, 3].map(i => ({ id: 'b' + i, name: names[i], team: i % 2, kind: 'bot', loadout: botLoadout(3, i >> 1) })), { aiLevel: 3 });
+  sim = new Sim(Array.from({ length: CFG.teamSize * 2 }, (_, i) => ({ id: 'b' + i, name: names[i % names.length], team: i % 2, kind: 'bot', loadout: botLoadout(3, i >> 1) })), { aiLevel: 3 });
   sim.phaseT = 1.2;
   me = null; mode = 'title'; paused = false; attractT = 0;
   view.attach(sim); ui.showTitle(keepPanel);
@@ -152,13 +155,14 @@ function startAttract(keepPanel = false) {
 }
 
 function startSolo() {
-  const lv = save.aiLevel, names = shuffled(CFG.botNames);
-  beginMatch([
-    { id: 'me', name: save.name || '나', team: 0, kind: 'human', local: true, loadout: loadoutOf(save) },
-    { id: 'b1', name: names[0], team: 0, kind: 'bot', loadout: botLoadout(lv, 1) },
-    { id: 'b2', name: names[1], team: 1, kind: 'bot', loadout: botLoadout(lv, 0) },
-    { id: 'b3', name: names[2], team: 1, kind: 'bot', loadout: botLoadout(lv, 1) },
-  ], { aiLevel: lv, firstClimb: save.stats.matches % 2 });   // 첫 경기는 내가 먼저 등반
+  const lv = save.aiLevel, names = shuffled(CFG.botNames), T = CFG.teamSize;
+  // 나 + AI 동료 대 AI 팀. 총은 팀 안 자리(slot) 순서대로 나눠 든다
+  const bots = Array.from({ length: T * 2 - 1 }, (_, i) => {
+    const team = i < T - 1 ? 0 : 1;
+    return { id: 'b' + (i + 1), name: names[i % names.length], team, kind: 'bot', loadout: botLoadout(lv, team ? i - (T - 1) : i + 1) };
+  });
+  beginMatch([{ id: 'me', name: save.name || '나', team: 0, kind: 'human', local: true, loadout: loadoutOf(save) }, ...bots],
+    { aiLevel: lv, firstClimb: save.stats.matches % 2 });   // 첫 경기는 내가 먼저 등반
 }
 
 function beginMatch(players, opts) {
@@ -214,7 +218,7 @@ function sound(e) {
       break;
     case 'fall': sfx.play('fall', { pos: e, vol: mine ? 1 : 0.7 }); break;
     case 'respawn': if (mine) sfx.play('respawn'); break;
-    case 'stage': if (mine) { sfx.play(e.stage === 3 ? 'finish' : 'stage'); sfx.play('coin', { vol: 0.8 }); } else sfx.play('stage', { pos, vol: 0.5 }); break;
+    case 'stage': if (mine) { sfx.play(e.stage === CFG.stages.length ? 'finish' : 'stage'); sfx.play('coin', { vol: 0.8 }); } else sfx.play('stage', { pos, vol: 0.5 }); break;
     case 'count': sfx.play('count'); break;
     case 'hurry': sfx.play('count', { rate: 1.3, vol: 0.7 }); break;
     case 'nearMiss': if (mine) sfx.play('nearmiss'); break;
@@ -241,6 +245,9 @@ function handle(e) {
       if (e.a === me) {                               // 이 차례에 그 단계를 처음 끝냈을 때만 발생하는 이벤트
         save.coins += e.reward; earned += e.reward; persist(save);
         ui.coinFly(e.reward);
+        // 다음 단계에 새 규칙이 있으면 처음 한 번 알려 준다(단계 완료 글자가 지나간 뒤에)
+        const next = CFG.stages[e.stage], match = sim;
+        if (next?.tip) setTimeout(() => { if (sim === match && sim.phase === 'leg') tip('stage' + (e.stage + 1), next.tip, 9000); }, 2400);
       }
       break;
     case 'finish':
@@ -275,7 +282,7 @@ function updateArrows() {
       // 등반 중: 나를 겨누는 조준이 화면 밖에서 시작되면 방향을 알려 준다
       if (me.role === 'climb' && a.role === 'shoot' && a.windup > 0 && a.aim) {
         const m = view.views.get(me.id).pos;
-        if (Math.hypot(a.aim.x - m.x, a.aim.z - m.z) < 14) arrowItems.push({ pos: v.head, color: '#' + CFG.guns[a.gun.id].color.toString(16).padStart(6, '0'), label: '조준!' });
+        if (Math.hypot(a.aim.x - m.x, a.aim.y - m.y, a.aim.z - m.z) < 14) arrowItems.push({ pos: v.head, color: '#' + CFG.guns[a.gun.id].color.toString(16).padStart(6, '0'), label: '조준!' });
       }
     }
   }

@@ -160,8 +160,8 @@ export class ActorView {
     }
   }
 
-  /** 용암에 빠졌을 때: 엉덩이에 불이 붙어 위로 솟구쳤다가 펑 */
-  die(x, y, z) { this.death = { t: 0, x, y, z, spin: (Math.random() - 0.5) * 30 }; }
+  /** 용암에 빠졌을 때: 엉덩이에 불이 붙어 위로 솟구쳤다가 펑. air(공중에서 추락 처리)면 그 자리에서 바로 펑 */
+  die(x, y, z, air = false) { this.death = { t: air ? 0.95 : 0, air, x, y, z, spin: (Math.random() - 0.5) * 30 }; }
   land(v) { this.squash = Math.min(0.42, v / 130); }
   onHit() { this.hitSpin = 1; }
   onFire() { this.recoil = 1; }
@@ -184,7 +184,7 @@ export class ActorView {
     if (this.death && a.alive) { this.death = null; this.pop = 0; }   // 복귀·역할 교대로 다시 살아났으면 연출 종료
     if (this.death) {                                     // 용암 발사 연출
       const d = this.death; d.t += dt;
-      const t = d.t, up = 46 * t - 42 * t * t;          // 엉덩이에 불이 붙어 13 stud쯤 솟구친다
+      const t = d.t, up = d.air ? 0 : 46 * t - 42 * t * t;   // 엉덩이에 불이 붙어 13 stud쯤 솟구친다
       root.visible = t < 1.0;
       root.position.set(d.x, d.y + Math.max(up, -2) + 0.5, d.z);
       root.rotation.set(t * d.spin * 0.4, t * d.spin, 0);

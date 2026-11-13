@@ -10,7 +10,7 @@ export const defaultSave = () => ({
   levels: { basic: 0, rapid: 0, heavy: 0 },
   equipped: 'basic',
   aiLevel: 1,
-  stats: { matches: 0, wins: 0, best: null },
+  stats: { matches: 0, wins: 0, best: null, stages: CFG.stages.length },   // best: 완주 최고 기록(stages단계 코스 기준)
   settings: { volume: 0.8, muted: false, music: true, quality: 'auto' },
   tips: {},
   name: '',
@@ -30,7 +30,8 @@ export function sanitize(raw) {
   d.aiLevel = int(raw.aiLevel, 1, 5, 1);
   d.stats.matches = int(raw.stats?.matches, 0, 1e9, 0);
   d.stats.wins = int(raw.stats?.wins, 0, 1e9, 0);
-  d.stats.best = Number.isFinite(raw.stats?.best) && raw.stats.best > 0 ? raw.stats.best : null;
+  // 코스 단계 수가 바뀌면 예전 완주 기록은 비교할 수 없으므로 지운다(세 단계 시절 기록이 영영 안 깨지는 일을 막는다)
+  d.stats.best = raw.stats?.stages === d.stats.stages && Number.isFinite(raw.stats?.best) && raw.stats.best > 0 ? raw.stats.best : null;
   const s = raw.settings || {};
   d.settings.volume = Number.isFinite(s.volume) ? Math.min(1, Math.max(0, s.volume)) : 0.8;
   d.settings.muted = !!s.muted;

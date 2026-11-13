@@ -12,7 +12,8 @@ export class Online {
   /** hooks: { lobby(), start(players, opts) → sim, closed(msg), note(html) } */
   constructor(hooks) {
     this.h = hooks; this.net = null; this.sim = null;
-    this.fill = true; this.loadouts = new Map(); this.readySet = new Set();
+    this.fill = true; this.aiLevel = 3; this.loadouts = new Map(); this.readySet = new Set();
+    this.teams = new Map();       // id → 0|1: 대기실에서 직접 고른 팀(안 골랐으면 없음)
     this.inMatch = false; this.sendT = 0; this.syncT = 0; this.matches = 0;
     this.directory = { people: [], rooms: [] };
   }
@@ -30,33 +31,50 @@ export class Online {
     try { await net.connect(name); }
     catch (e) { net.close(); if (this.net === net) this.net = null; throw e; }
   }
-  async join(room, loadout, title) {
+  /** aiLevel: 내가 방을 만들 때 쓸 AI 난이도. 남의 방에 들어가면 방장이 알려 주는 값으로 바뀐다 */
+  async join(room, loadout, title, aiLevel = 3) {
     const net = this.net;
     await net.joinRoom(room, title);
-    this.fill = true; this.inMatch = false; this.sim = null; this.matches = 0;
-    this.loadouts = new Map([[net.id, validLo(loadout)]]);
+    this.fill = true; this.aiLevel = aiLevel; this.inMatch = false; this.sim = null; this.matches = 0;
+    this.loadouts = new Map([[net.id, validLo(loadout)]]); this.teams = new Map();
     net.send({ t: 'hello', lo: this.loadouts.get(net.id) });
     this.h.lobby();
   }
-  leaveRoom() { this.net?.leaveRoom(); this.sim = null; this.inMatch = false; this.loadouts.clear(); }
+  leaveRoom() { this.net?.leaveRoom(); this.sim = null; this.inMatch = false; this.loadouts.clear(); this.teams.clear(); }
   invite(id) { this.net.send({ t: 'invite', to: id }); }
   leave() { if (this.net) this.net.close(); this.net = null; this.sim = null; this.inMatch = false; this.directory = { people: [], rooms: [] }; }
 
-  /** 명단: 사람은 들어온 순서대로 민트/핑크를 번갈아 맡고, (설정 시) 빈자리는 AI가 채워 2대2를 만든다 */
+  /** 명단: 사람은 고른 팀으로(안 골랐으면 들어온 번호대로 민트/핑크 번갈아) 가고, 정원이 찬 팀을 고른 사람은 반대 팀으로 간다.
+   *  (설정 시) 빈자리는 AI가 채워 teamSize 대 teamSize를 만든다. 같은 정보로 모두가 같은 명단을 계산한다. */
   roster() {
+    const T = CFG.teamSize, count = [0, 0];
     const list = [...this.net.peers].map(([id, p]) => ({ id, name: p.name, kind: 'human' }))
       .sort((a, b) => +a.id.slice(1) - +b.id.slice(1))
-      .map((p, i) => ({ ...p, team: i % 2, loadout: this.loadouts.get(p.id) || { id: 'basic', level: 0 } }));
+      .map((p) => {
+        let team = this.teams.get(p.id) ?? (+p.id.slice(1) + 1) % 2;
+        if (count[team] >= T) team = 1 - team;
+        count[team]++;
+        return { ...p, team, loadout: this.loadouts.get(p.id) || { id: 'basic', level: 0 } };
+      });
     if (this.fill) {
       let n = 0;
       for (const team of [0, 1]) {
-        while (list.filter((p) => p.team === team).length < 2) { list.push({ id: 'bot' + n, name: CFG.botNames[n % CFG.botNames.length], kind: 'bot', team, loadout: botLoadout(3, n) }); n++; }
+        while (count[team] < T) { list.push({ id: 'bot' + n, name: CFG.botNames[n % CFG.botNames.length], kind: 'bot', team, loadout: botLoadout(this.aiLevel, n) }); n++; count[team]++; }
       }
     }
     return list;
   }
   canStart() { const r = this.roster(); return this.isHost && r.some((p) => p.team === 0) && r.some((p) => p.team === 1); }
-  setFill(v) { if (!this.isHost) return; this.fill = !!v; this.net.send({ t: 'lobby', fill: this.fill }); this.h.lobby(); }
+  sendLobby(to) { this.net.send({ t: 'lobby', fill: this.fill, ai: this.aiLevel, to }); }
+  setFill(v) { if (!this.isHost) return; this.fill = !!v; this.sendLobby(); this.h.lobby(); }
+  setAi(v) { if (!this.isHost) return; this.aiLevel = v; this.sendLobby(); this.h.lobby(); }
+  /** 내 팀 고르기(대기실에서만). 정원 확인은 roster()가 한다 */
+  setTeam(t) {
+    if (!this.active || (this.inMatch && this.sim?.phase !== 'results')) return;
+    this.teams.set(this.id, t ? 1 : 0);
+    this.net.send({ t: 'hello', lo: this.loadouts.get(this.id), team: this.teams.get(this.id) });
+    this.h.lobby();
+  }
   setLoadout(lo) { if (!this.active) return; const v = validLo(lo); this.loadouts.set(this.id, v); this.net.send({ t: 'lo', lo: v }); }
 
   /** "준비 완료": 사람 모두가 누르면 방장이 남은 대기 시간을 줄인다 */
@@ -69,12 +87,12 @@ export class Online {
   start() {
     if (!this.canStart()) return;
     this.matches++;
-    const msg = { t: 'start', players: this.roster(), firstClimb: this.matches % 2 ? 0 : 1, at: this.net.now() };
+    const msg = { t: 'start', players: this.roster(), firstClimb: this.matches % 2 ? 0 : 1, ai: this.aiLevel, at: this.net.now() };
     this.net.send(msg); this.net.send({ t: 'lock', v: true });
     this.begin(msg);
   }
   begin(msg) {
-    if (!Array.isArray(msg.players) || msg.players.length < 2 || msg.players.length > 4) return;
+    if (!Array.isArray(msg.players) || msg.players.length < 2 || msg.players.length > CFG.teamSize * 2) return;
     const players = msg.players.map((p) => ({
       id: String(p?.id).slice(0, 8), name: String(p?.name ?? '').replace(/[<>&"']/g, '').slice(0, 10) || '손님',
       team: p?.team ? 1 : 0, kind: p?.kind === 'bot' ? 'bot' : 'human', loadout: validLo(p?.loadout),
@@ -82,7 +100,7 @@ export class Online {
     for (const p of players) { p.local = p.id === this.id; p.auth = p.local || (this.isHost && p.kind === 'bot'); }
     if (!players.some((p) => p.local) || new Set(players.map((p) => p.id)).size !== players.length) return;
     this.inMatch = true; this.readySet = new Set(); this.sendT = 0; this.syncT = 0;
-    this.sim = this.h.start(players, { firstClimb: msg.firstClimb ? 1 : 0, aiLevel: 3, host: this.isHost });
+    this.sim = this.h.start(players, { firstClimb: msg.firstClimb ? 1 : 0, aiLevel: msg.ai | 0, host: this.isHost });   // 방장이 바뀌어도 같은 난이도로 AI를 이어 받는다
     if (!this.isHost) this.sim.phaseT = Math.max(0.5, this.sim.phaseT - lagOf(this.net, msg.at, 2));
   }
 
@@ -101,13 +119,13 @@ export class Online {
     const net = this.net, sim = this.sim, live = this.inMatch && !!sim;
     const fromHost = m.from === net.hostId, lag = lagOf(net, m.at);
     switch (m.t) {
-      case 'peer':                                   // 새로 온 사람에게 내 장비(방장이면 대기실 설정도)를 알려 준다
-        net.send({ t: 'hello', lo: this.loadouts.get(this.id), to: m.id });
-        if (this.isHost) net.send({ t: 'lobby', fill: this.fill, to: m.id });
+      case 'peer':                                   // 새로 온 사람에게 내 장비·고른 팀(방장이면 대기실 설정도)을 알려 준다
+        net.send({ t: 'hello', lo: this.loadouts.get(this.id), team: this.teams.get(this.id), to: m.id });
+        if (this.isHost) this.sendLobby(m.id);
         this.h.lobby();
         break;
       case 'left': {
-        this.loadouts.delete(m.id);
+        this.loadouts.delete(m.id); this.teams.delete(m.id);
         if (live) {
           const gone = sim.actor(m.id);
           if (gone) this.h.note(`${gone.p.name} 나감 → AI가 이어서 해요`);
@@ -122,14 +140,15 @@ export class Online {
       case 'hello': case 'lo': {
         const lo = validLo(m.lo);
         this.loadouts.set(m.from, lo);
+        if (m.t === 'hello') { if (m.team === 0 || m.team === 1) this.teams.set(m.from, m.team); else this.teams.delete(m.from); }
         if (live) sim.setLoadout(m.from, lo.id, lo.level);     // 차례 중이면 sim이 다음 차례부터 적용한다
         this.h.lobby();
         break;
       }
-      case 'lobby': if (fromHost) { this.fill = !!m.fill; this.h.lobby(); } break;
+      case 'lobby': if (fromHost) { this.fill = !!m.fill; if (CFG.ai.levels[m.ai - 1]) this.aiLevel = m.ai; this.h.lobby(); } break;
       case 'start': if (fromHost) this.begin(m); break;
       case 'ready': if (this.isHost && live) this.markReady(m.from); break;
-      case 'st': if (live && Array.isArray(m.a)) for (const s of m.a.slice(0, 4)) if (this.owns(m.from, s?.[0])) sim.applyState(s, lag); break;
+      case 'st': if (live && Array.isArray(m.a)) for (const s of m.a.slice(0, CFG.teamSize * 2)) if (this.owns(m.from, s?.[0])) sim.applyState(s, lag); break;
       case 'shot': if (live && this.owns(m.from, m.id)) sim.addRemoteShot(m, lag); break;
       case 'ev': if (live && this.owns(m.from, m.id)) sim.applyEvent(m); break;
       case 'sync': if (live && fromHost) sim.applySync(m, lag); break;
@@ -163,7 +182,7 @@ export class Online {
     const net = this.net, sim = this.sim, a = e.a;
     switch (e.type) {
       case 'shot': if (a.auth) net.send({ t: 'shot', id: a.id, n: e.s.n, o: [e.s.x, e.s.y, e.s.z], v: [e.s.vx, e.s.vy, e.s.vz], at: net.now() }); break;
-      case 'fall': if (a.auth) net.send({ t: 'ev', e: 'fall', id: a.id, x: e.x, z: e.z, by: e.by ? e.by.id : null }); break;
+      case 'fall': if (a.auth) net.send({ t: 'ev', e: 'fall', id: a.id, x: e.x, y: e.y, z: e.z, by: e.by ? e.by.id : null }); break;
       case 'respawn': if (a.auth) net.send({ t: 'ev', e: 'respawn', id: a.id }); break;
       case 'stage': if (a.auth) net.send({ t: 'ev', e: 'stage', id: a.id, stage: e.stage, time: sim.clock }); break;
       case 'hit': if (a.auth) net.send({ t: 'ev', e: 'hit', id: a.id, by: e.by.id, n: e.s.n, x: e.s.x, y: e.s.y, z: e.s.z }); break;
