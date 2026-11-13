@@ -2,3 +2,20 @@ node_modules/
 .DS_Store
 /out/
 /assets-src/
+
+# 로컬 작업 지침과 에셋 제작 설정
+/AGENTS.md
+/tools/gen-assets.mjs
+
+# 비밀 설정과 인증 파일
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+.npmrc
+.netrc
