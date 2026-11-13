@@ -14,24 +14,33 @@ export class Online {
     this.h = hooks; this.net = null; this.sim = null;
     this.fill = true; this.loadouts = new Map(); this.readySet = new Set();
     this.inMatch = false; this.sendT = 0; this.syncT = 0; this.matches = 0;
+    this.directory = { people: [], rooms: [] };
   }
+  get connected() { return !!this.net?.visitorId; }
   get active() { return !!(this.net && this.net.id); }
   get isHost() { return !!this.net?.isHost; }
   get id() { return this.net?.id || null; }
   get link() { return `${location.origin}${location.pathname}?room=${this.net.room}`; }
 
-  async join(room, name, loadout) {
+  async enter(name) {
     this.leave();
-    const net = new Net();
+    const net = this.net = new Net();
     net.on = (m) => this.recv(m);
     net.onClose = () => { this.net = null; this.inMatch = false; this.sim = null; this.h.closed('연결이 끊겼어요'); };
-    await net.connect(room, name);
-    this.net = net; this.fill = true; this.inMatch = false; this.sim = null; this.matches = 0;
+    try { await net.connect(name); }
+    catch (e) { net.close(); if (this.net === net) this.net = null; throw e; }
+  }
+  async join(room, loadout, title) {
+    const net = this.net;
+    await net.joinRoom(room, title);
+    this.fill = true; this.inMatch = false; this.sim = null; this.matches = 0;
     this.loadouts = new Map([[net.id, validLo(loadout)]]);
     net.send({ t: 'hello', lo: this.loadouts.get(net.id) });
     this.h.lobby();
   }
-  leave() { if (this.net) this.net.close(); this.net = null; this.sim = null; this.inMatch = false; }
+  leaveRoom() { this.net?.leaveRoom(); this.sim = null; this.inMatch = false; this.loadouts.clear(); }
+  invite(id) { this.net.send({ t: 'invite', to: id }); }
+  leave() { if (this.net) this.net.close(); this.net = null; this.sim = null; this.inMatch = false; this.directory = { people: [], rooms: [] }; }
 
   /** 명단: 사람은 들어온 순서대로 민트/핑크를 번갈아 맡고, (설정 시) 빈자리는 AI가 채워 2대2를 만든다 */
   roster() {
@@ -86,6 +95,9 @@ export class Online {
   }
 
   recv(m) {
+    if (m.t === 'directory') { this.directory = m; this.h.directory(); return; }
+    if (m.t === 'invite') { this.h.invite(m); return; }
+    if (m.t === 'notice') { this.h.notice(m.msg); return; }
     const net = this.net, sim = this.sim, live = this.inMatch && !!sim;
     const fromHost = m.from === net.hostId, lag = lagOf(net, m.at);
     switch (m.t) {

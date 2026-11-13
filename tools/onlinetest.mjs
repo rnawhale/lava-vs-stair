@@ -1,4 +1,4 @@
-// 온라인 대전 검증: 브라우저 2개(방장 + 초대 링크로 들어온 손님)가 실제 입력으로 한 경기를 끝까지 한다.
+// 온라인 검증: 친구 목록·방 목록·게임 안 초대·링크 입장 뒤 실제 입력으로 한 경기를 끝까지 한다.
 //   node tools/onlinetest.mjs      (서버가 떠 있어야 한다: node server.js)
 import { mkdirSync } from 'node:fs';
 import { open, sleep, click } from './lib.mjs';
@@ -19,27 +19,81 @@ const info = (page) => page.evaluate(() => {
   };
 });
 
-// 1) 방장이 방을 만든다
+// 1) 링크 없이 친구 만나기 입장 → 실시간 이름·방 목록
 const A = await open();
 await click(A.page, '.online'); await sleep(300);
-await A.page.fill('.nick', '방장');
+await A.page.fill('.nick', '테스트방장');
 await click(A.page, '.join');
-await A.page.waitForSelector('.sheet.lobby', { timeout: 8000 });
-const link = await A.page.inputValue('.link');
-check('방 만들기 → 대기실과 초대 링크', /\?room=[A-Z0-9]{5}$/.test(link), link);
-await A.page.screenshot({ path: `${OUT}/01-lobby-host.png` });
-
-// 2) 손님이 초대 링크로 들어온다(로그인 없음)
-const B = await open({ query: link.split('?')[1] });
-await B.page.waitForSelector('.sheet.online', { timeout: 8000 });
-await B.page.fill('.nick', '손님');
+await A.page.waitForSelector('.sheet.hall', { timeout: 100000 });
+const B = await open();
+await click(B.page, '.online'); await sleep(300);
+await B.page.fill('.nick', '테스트친구');
 await click(B.page, '.join');
-await B.page.waitForSelector('.sheet.lobby', { timeout: 8000 });
+await B.page.waitForSelector('.sheet.hall', { timeout: 100000 });
+await A.page.waitForFunction(() => [...document.querySelectorAll('.person b')].some((e) => e.textContent === '테스트친구'));
+check('링크 없이 입장 → 서로의 이름이 친구 목록에 나타남', (await B.page.locator('.people-list').innerText()).includes('테스트방장'));
+const guestId = await B.page.evaluate(() => window.__lvs.online.net.visitorId);
+await A.page.fill('.room-title', '친구 모여라! 용암탑');
+await click(A.page, '.create');
+await A.page.waitForSelector('.sheet.lobby', { timeout: 8000 });
+let code = await A.page.evaluate(() => window.__lvs.online.net.room);
+await B.page.waitForSelector(`.room-card[data-room="${code}"]`);
+check('정한 방 제목과 인원이 친구의 방 목록에 나타남', (await B.page.locator(`.room-card[data-room="${code}"]`).innerText()).includes('친구 모여라! 용암탑'));
+await B.page.screenshot({ path: `${OUT}/00-room-list.png` });
+await B.page.setViewportSize({ width: 390, height: 844 }); await sleep(300);
+check('휴대폰 너비에서 방·친구 목록이 가로로 넘치지 않음', await B.page.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollWidth <= s.clientWidth + 1; }));
+await B.page.screenshot({ path: `${OUT}/00-room-list-mobile.png` });
+await B.page.setViewportSize({ width: 1280, height: 720 }); await sleep(300);
+await B.page.locator(`.room-card[data-room="${code}"]`).scrollIntoViewIfNeeded();
+await click(B.page, `.room-card[data-room="${code}"]`);
+await B.page.waitForSelector('.sheet.lobby');
+check('방 제목을 눌러 바로 입장', await B.page.evaluate((code) => window.__lvs.online.net.room === code, code));
+await click(B.page, '.sheet.lobby .x');
+await B.page.waitForSelector('.sheet.hall');
+check('방에서 나가면 친구 만나기로 복귀', await B.page.evaluate(() => window.__lvs.online.connected && !window.__lvs.online.active));
+await click(A.page, '.sheet.lobby .x');
+await A.page.waitForSelector('.sheet.hall');
+await B.page.waitForSelector(`.room-card[data-room="${code}"]`, { state: 'detached' });
+check('마지막 사람이 나간 방은 목록에서 사라짐', true);
+
+// 2) 친구 이름 옆에서 초대: 방 자동 생성, 만료·거절·수락
+await A.page.locator(`[data-invite="${guestId}"]`).scrollIntoViewIfNeeded();
+await click(A.page, `[data-invite="${guestId}"]`);
+await A.page.waitForSelector('.sheet.lobby');
+await B.page.waitForSelector('.invite-offer:not([hidden])');
+check('친구 목록에서 초대 → 방 생성과 상대의 초대 알림', (await B.page.locator('.invite-offer').innerText()).includes('테스트방장'));
+await click(A.page, '.sheet.lobby .x');
+await B.page.waitForSelector('.invite-offer', { state: 'hidden' });
+check('초대한 사람이 방을 닫으면 오래된 초대가 사라짐', true);
+await sleep(3100);
+await A.page.locator(`[data-invite="${guestId}"]`).scrollIntoViewIfNeeded();
+await click(A.page, `[data-invite="${guestId}"]`);
+await B.page.waitForSelector('.invite-offer:not([hidden])');
+await click(B.page, '.decline-invite');
+check('초대를 거절하고 방 목록에 머물 수 있음', (await info(B.page)).panel === 'hall' && !await B.page.locator('.invite-offer').isVisible());
+await sleep(3100);
+await A.page.locator(`[data-invite="${guestId}"]`).scrollIntoViewIfNeeded();
+await click(A.page, `[data-invite="${guestId}"]`);
+await B.page.waitForSelector('.invite-offer:not([hidden])');
+await B.page.screenshot({ path: `${OUT}/00-invitation.png` });
+await click(B.page, '.accept-invite');
+await B.page.waitForSelector('.sheet.lobby');
+check('초대의 같이 하기 버튼으로 같은 방에 입장', await B.page.evaluate(() => window.__lvs.online.net.room) === await A.page.evaluate(() => window.__lvs.online.net.room));
+const link = await A.page.inputValue('.link');
+check('밖에 있는 친구를 위한 초대 링크도 유지', /\?room=[A-Z0-9]{5}$/.test(link), link);
+const C = await open({ query: link.split('?')[1] });
+await C.page.waitForSelector('.sheet.online');
+await C.page.fill('.nick', '링크친구'); await click(C.page, '.join');
+await C.page.waitForSelector('.sheet.lobby', { timeout: 100000 });
+check('기존 초대 링크에서도 입장 가능', await C.page.evaluate(() => window.__lvs.online.active));
+await click(C.page, '.sheet.lobby .x');
+await C.page.waitForSelector('.sheet.hall');
 await sleep(500);
 const slotsA = await A.page.locator('.slot').allInnerTexts(), slotsB = await B.page.locator('.slot').allInnerTexts();
 check('두 화면의 대기실 명단이 같다(사람 2 + AI 2)', slotsA.length === 4 && JSON.stringify(slotsA) .replace(/ · 나/g, '') === JSON.stringify(slotsB).replace(/ · 나/g, ''), slotsA.join(' / ').replace(/\n/g, ' '));
 check('손님 화면에는 시작 버튼 대신 대기 안내', (await B.page.locator('.start').count()) === 0 && (await B.page.locator('.wait').count()) === 1);
 await B.page.screenshot({ path: `${OUT}/02-lobby-guest.png` });
+await A.page.screenshot({ path: `${OUT}/01-lobby-host.png` });
 
 // 3) 방장이 시작 → 두 화면 모두 경기 진입
 await click(A.page, '.start');
@@ -48,6 +102,13 @@ let a = await info(A.page), b = await info(B.page);
 check('양쪽 모두 경기 시작', a.inMatch && b.inMatch && a.phase === 'countdown' && b.phase === 'countdown', `${a.phase}/${b.phase}`);
 check('사람은 서로 다른 팀, 캐릭터 4명', a.me.team !== b.me.team && a.actors.length === 4 && b.actors.length === 4);
 check('권한: 방장=본인+AI 2, 손님=본인만', a.actors.filter((x) => x.auth).length === 3 && b.actors.filter((x) => x.auth).length === 1);
+code = await A.page.evaluate(() => window.__lvs.online.net.room);
+await C.page.waitForFunction((code) => document.querySelector(`.room-card[data-room="${code}"]`)?.disabled, code);
+check('경기가 시작되면 다른 친구의 방 목록에 게임 중·입장 제한 표시', (await C.page.locator(`.room-card[data-room="${code}"]`).innerText()).includes('게임 중'));
+await click(C.page, '.sheet.hall .x');
+await A.page.waitForFunction(() => !window.__lvs.online.directory.people.some(p => p.name === '링크친구'));
+check('친구 만나기를 닫으면 접속한 친구 목록에서 사라짐', true);
+await C.browser.close();
 await click(A.page, '.ready'); await click(B.page, '.ready');
 
 // 4) 두 사람이 동시에 실제 입력으로 플레이
@@ -103,7 +164,7 @@ check('방장 이탈 → 손님이 방장 승계, 모든 캐릭터 인수', b.ho
 const pt0 = b.pt; await sleep(1200);
 check('승계 뒤에도 경기 진행', (await info(B.page)).pt !== pt0);
 
-const bad = [...A.logs, ...B.logs].filter((l) => !l.includes('404') && !l.includes('WebSocket'));
+const bad = [...A.logs, ...B.logs, ...C.logs].filter((l) => !l.includes('404') && !l.includes('WebSocket'));
 check('콘솔 오류 없음', bad.length === 0, bad.slice(0, 3).join(' | '));
 await B.browser.close();
 const fail = results.filter((r) => !r).length;

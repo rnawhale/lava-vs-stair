@@ -42,7 +42,7 @@ export class UI {
   <p class="tagline">용암 위 계단을 오르고, 물총으로 방해하라!</p>
   <div class="menu">
     <button class="big play">▶ 바로 플레이<small>AI 대전 · 로그인 없음</small></button>
-    <button class="mid online">👥 친구 초대 대전<small>2~4인 온라인</small></button>
+    <button class="mid online">👥 친구와 대전<small>친구 만나기 · 방 골라서 입장</small></button>
     <button class="mid shop-open">🔫 물총 상점</button>
   </div>
   <div class="title-foot">
@@ -76,9 +76,9 @@ export class UI {
   syncCoins() { for (const b of this.root.querySelectorAll('.coins b')) b.textContent = this.save.coins; }
   syncSound() { $('.mute', this.root).textContent = this.save.settings.muted ? '🔇' : '🔊'; }
   fade() { this.fadeEl.classList.remove('go'); void this.fadeEl.offsetWidth; this.fadeEl.classList.add('go'); }
-  showTitle() {
+  showTitle(keepPanel = false) {
     this.hud.hidden = true; this.title.hidden = false; this.cross.hidden = true; this.touch.hidden = true;
-    this.clearWorldUi(); this.closePanel(true);
+    this.clearWorldUi(); if (!keepPanel) this.closePanel(true);
     const lv = this.save.aiLevel;
     $('.title .ai', this.root).innerHTML = `🤖 AI ${esc(CFG.ai.levels[lv - 1].name)} <span class="stars">${stars(lv)}</span>`;
     const st = this.save.stats, rec = $('.title .rec', this.root);
@@ -419,33 +419,102 @@ export class UI {
   // ── 온라인: 입장과 대기실 ──
   openOnline(room, err) {
     this.openPanel('online', `
-      <header><h2>👥 친구 초대 대전</h2><button class="x" aria-label="닫기">✕</button></header>
-      <p class="shop-note">링크 하나로 2~4명이 함께 해요. 빈 자리는 AI가 채워 2대2가 됩니다. 로그인은 필요 없어요.</p>
-      <label class="row">닉네임 <input class="nick" type="text" maxlength="10" placeholder="손님" value="${esc(this.save.name)}" autocomplete="off"></label>
-      <div class="col"><button class="big join">${room ? `방 ${esc(room)} 참가하기` : '새 방 만들기'}</button></div>
-      <p class="msg">${err ? esc(err) : ''}</p>`);
+      <header><h2>👥 친구 만나기</h2><button class="x" aria-label="닫기">✕</button></header>
+      <p class="shop-note">친구가 알아볼 이름을 적어 주세요. 접속한 친구를 만나고, 마음에 드는 방에 들어가요!</p>
+      <form class="online-entry">
+        <label class="row">내 별명 <input class="nick" type="text" maxlength="10" required placeholder="예: 용감한감자" value="${esc(this.save.name)}" autocomplete="nickname"></label>
+        <div class="col"><button class="big join" type="submit">${room ? '초대받은 방으로 ▶' : '친구 만나러 가기 ▶'}</button></div>
+      </form>
+      <p class="msg" role="status">${err ? esc(err) : ''}</p>`);
     $('.x', this.sheet).onclick = () => { this.h.click?.(); this.closePanel(); };
     const btn = $('.join', this.sheet);
-    btn.onclick = () => {
+    $('.online-entry', this.sheet).onsubmit = (e) => {
+      e.preventDefault();
       this.h.click?.();
-      btn.disabled = true; btn.textContent = '연결 중…';
-      this.h.joinRoom($('.nick', this.sheet).value.trim());
+      const name = $('.nick', this.sheet).value.trim();
+      if (!name) { $('.msg', this.sheet).textContent = '친구가 알아볼 별명을 적어 주세요.'; return; }
+      btn.disabled = true; btn.textContent = '친구들을 만나러 가는 중…';
+      $('.msg', this.sheet).textContent = '처음에는 조금 걸릴 수 있어요. 잠시만 기다려 주세요!';
+      this.h.enterOnline(name);
     };
+  }
+  openHall(v, err = '') {
+    this.openPanel('hall', `
+      <header><h2>👥 친구 만나기</h2><button class="x" aria-label="친구 만나기 나가기">✕</button></header>
+      <p class="meeting-intro"><b>${esc(v.name)}</b>, 어서 와! 방 제목을 누르거나 친구를 초대해 봐요.</p>
+      <div class="invite-offer" hidden></div>
+      <form class="create-room">
+        <label for="room-title">내 방 만들기</label>
+        <div class="create-row"><input id="room-title" class="room-title" type="text" maxlength="24" aria-label="방 제목" placeholder="방 제목을 적어 주세요" value="${esc(this.roomTitleDraft || `${v.name}의 용암탑`)}"><button class="mid go create" type="submit">＋ 방 만들기</button></div>
+      </form>
+      <p class="msg" data-online-message role="status">${esc(err)}</p>
+      <div class="meeting-grid">
+        <section><h3>🚪 골라서 들어가기</h3><div class="room-list"></div></section>
+        <section><h3>🟢 접속한 친구 <small class="people-count"></small></h3><div class="people-list"></div></section>
+      </div>`);
+    $('.x', this.sheet).onclick = () => { this.h.click?.(); this.closePanel(); };
+    $('.room-title', this.sheet).oninput = (e) => { this.roomTitleDraft = e.target.value; };
+    $('.create-room', this.sheet).onsubmit = (e) => { e.preventDefault(); this.h.click?.(); this.h.joinRoom(null, this.roomTitle()); };
+    this.refreshDirectory(v);
+  }
+  roomTitle() { return $('.room-title', this.sheet)?.value.trim() || this.roomTitleDraft || `${this.save.name}의 용암탑`; }
+  setOnlineBusy(busy) {
+    this.onlineBusy = busy;
+    if (!['hall', 'lobby'].includes(this.panel?.name)) return;
+    for (const b of this.sheet.querySelectorAll('.create, [data-room], [data-invite], .accept-invite')) b.disabled = busy || b.dataset.unavailable === 'true';
+  }
+  onlineMessage(msg) { const p = $('[data-online-message]', this.sheet); if (p) p.textContent = msg; }
+  refreshDirectory(v) {
+    if (!['hall', 'lobby'].includes(this.panel?.name)) return;
+    const joinable = (r) => r && !r.locked && r.count < 4;
+    const findRoom = (code) => v.rooms.find((r) => r.code === code);
+    const rooms = $('.room-list', this.sheet);
+    if (rooms) {
+      rooms.innerHTML = v.rooms.map((r) => `<button class="room-card" data-room="${esc(r.code)}" data-unavailable="${!joinable(r)}" ${!joinable(r) || this.onlineBusy ? 'disabled' : ''}>
+        <span class="room-icon">${r.locked ? '🎮' : '🚪'}</span><span class="room-info"><b>${esc(r.title)}</b><small>${r.names.map(esc).join(' · ')}</small></span>
+        <span class="room-state">${r.count}/4명<small>${r.locked ? '게임 중' : r.count >= 4 ? '가득 참' : '들어가기 →'}</small></span></button>`).join('')
+        || '<p class="meeting-empty">아직 방이 없어요.<br>첫 번째 방을 만들어 볼까요?</p>';
+    }
+    const people = $('.people-list', this.sheet);
+    if (people) {
+      const own = findRoom(v.room);
+      $('.people-count', this.sheet).textContent = `${v.people.length}명`;
+      people.innerHTML = v.people.map((p) => {
+        const r = findRoom(p.room), me = p.id === v.me, together = v.room && p.room === v.room;
+        const action = me ? '<span class="person-me">나</span>' : together ? '<small>함께 있어요</small>'
+          : !p.room && (!v.room || joinable(own)) ? `<button class="mid go" data-invite="${esc(p.id)}" ${this.onlineBusy ? 'disabled' : ''}>초대</button>`
+          : !v.room && joinable(r) ? `<button class="mid" data-room="${esc(r.code)}" ${this.onlineBusy ? 'disabled' : ''}>같이 하기</button>` : '';
+        return `<div class="person"><span class="person-avatar" aria-hidden="true">${esc([...p.name][0])}</span><span class="person-info"><b>${esc(p.name)}</b><small>${r ? `${r.locked ? '🎮 게임 중' : '🚪 ' + esc(r.title)}` : '🟢 방 고르는 중'}</small></span>${action}</div>`;
+      }).join('');
+    }
+    const offer = $('.invite-offer', this.sheet), inv = this.pendingInvite;
+    if (inv && (!joinable(findRoom(inv.room)) || !v.people.some((p) => p.id === inv.from && p.room === inv.room))) this.pendingInvite = null;
+    if (offer) {
+      offer.hidden = !this.pendingInvite;
+      if (this.pendingInvite) {
+        offer.innerHTML = `<b>💌 ${esc(inv.name)}의 초대가 왔어요!</b><p>${esc(inv.title)}에서 같이 놀자!</p><div><button class="mid go accept-invite" ${this.onlineBusy ? 'disabled' : ''}>같이 하기 ▶</button><button class="mid decline-invite">나중에</button></div>`;
+        $('.accept-invite', offer).onclick = () => { this.h.click?.(); this.h.joinRoom(inv.room); };
+        $('.decline-invite', offer).onclick = () => { this.h.click?.(); this.pendingInvite = null; offer.hidden = true; };
+      }
+    }
+    for (const b of this.sheet.querySelectorAll('[data-room]')) b.onclick = () => { this.h.click?.(); this.h.joinRoom(b.dataset.room); };
+    for (const b of this.sheet.querySelectorAll('[data-invite]')) b.onclick = () => { this.h.click?.(); this.h.inviteFriend(b.dataset.invite); };
   }
   openLobby(v) {
     const slot = (p) => `<div class="slot" style="--c:${teamCss(p.team)}"><i></i><b>${p.kind === 'bot' ? '<i class="ai">AI</i>' : ''}${esc(p.name)}</b>
       <span>${CFG.teams[p.team].name} 팀${p.me ? ' · 나' : ''}${p.host ? ' · 방장' : ''}</span></div>`;
     const humans = v.players.filter(p => p.kind === 'human').length;
     this.openPanel('lobby', `
-      <header><h2>대기실 <span class="code">${esc(v.room)}</span></h2><button class="x" aria-label="나가기">✕</button></header>
-      <div class="invite"><input class="link" type="text" readonly value="${esc(v.link)}"><button class="mid copy">초대 링크 복사</button></div>
-      <p class="shop-note">이 링크를 친구에게 보내면 바로 들어와요 (${humans}/4명 접속)</p>
+      <header><h2>🚪 ${esc(v.title)}</h2><button class="x" aria-label="방 목록으로">✕</button></header>
+      <p class="shop-note">${humans}/4명 · 친구 이름 옆의 <b>초대</b>를 눌러 함께해요. 빈 자리는 AI가 채울 수 있어요.</p>
       <div class="slots">${v.players.map(slot).join('')}${v.players.length < 4 ? '<div class="slot empty"><b>빈 자리</b><span>초대를 기다리는 중…</span></div>'.repeat(4 - v.players.length) : ''}</div>
       ${v.isHost ? `<label class="row">빈 자리를 AI로 채우기 <input type="checkbox" class="fillc" ${v.fill ? 'checked' : ''}></label>` : ''}
       <div class="res-b">
         ${v.isHost ? `<button class="big start" ${v.canStart ? '' : 'disabled'}>경기 시작 ▶${v.canStart ? '' : '<small>양 팀에 한 명 이상 필요해요</small>'}</button>` : '<div class="wait">방장이 시작하면 경기가 열려요…</div>'}
         <button class="mid shop-open">🔫 상점</button>
-      </div>`, false);
+      </div>
+      <section class="lobby-friends"><h3>🟢 친구 초대하기 <small class="people-count"></small></h3><p class="msg" data-online-message role="status"></p><div class="people-list"></div></section>
+      <details class="link-extra"><summary>밖에 있는 친구에게 링크 보내기</summary><div class="invite"><input class="link" aria-label="초대 링크" type="text" readonly value="${esc(v.link)}"><button class="mid copy">링크 복사</button></div></details>`, false);
     $('.x', this.sheet).onclick = () => { this.h.click?.(); this.h.leaveRoom(); };
     $('.copy', this.sheet).onclick = async (e) => {
       this.h.click?.();
@@ -458,6 +527,7 @@ export class UI {
       $('.fillc', this.sheet).onchange = (e) => this.h.fill(e.target.checked);
       $('.start', this.sheet).onclick = () => { this.h.click?.(); this.h.startOnline(); };
     }
+    this.refreshDirectory(v.directory);
   }
 
   // ── 결과 ──

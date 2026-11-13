@@ -30,14 +30,21 @@ const ui = new UI(document.getElementById('ui'), save, {
   play: () => startSolo(),
   online: () => ui.openOnline(roomParam),
   isOnline: () => online.active,
-  joinRoom: async (name) => {
+  enterOnline: async (name) => {
+    const attempt = ++onlineAttempt;
     save.name = name.slice(0, 10); persist(save);
     try {
-      await online.join(roomParam || randomCode(), save.name || '손님', loadoutOf(save));
-      roomParam = online.net.room;
-      history.replaceState(null, '', '?room=' + roomParam);
-      ui.openLobby(lobbyView());
-    } catch (e) { ui.openOnline(roomParam, e.message); }
+      await online.enter(save.name);
+      if (attempt !== onlineAttempt) return;
+      save.name = online.net.name; persist(save);
+      if (roomParam) await joinRoom(roomParam);
+      else ui.openHall(directoryView());
+    } catch (e) { if (attempt === onlineAttempt) ui.openOnline(roomParam, e.message); }
+  },
+  joinRoom: (room, title) => joinRoom(room, title),
+  inviteFriend: async (id) => {
+    if (!online.active && !await joinRoom(null, ui.roomTitle())) return;
+    online.invite(id);
   },
   leaveRoom: () => leaveRoom(),
   fill: (v) => online.setFill(v),
@@ -56,6 +63,12 @@ const ui = new UI(document.getElementById('ui'), save, {
   thumb: (id, lv) => view.gunThumb(id, lv),
   // 모달이 열려 있는 동안 솔로 경기는 멈춘다(상점에서 시간에 쫓기지 않게)
   panel: (name, open) => {
+    if (!open && (name === 'online' || name === 'hall')) {
+      onlineAttempt++; online.leave(); roomParam = null; ui.pendingInvite = null;
+      history.replaceState(null, '', location.pathname);
+      return;
+    }
+    if (!open && name === 'lobby') return leaveRoom();
     if (!open && name === 'shop' && ui.lobbyBack) { ui.lobbyBack = false; if (online.active) return ui.openLobby(lobbyView()); }
     if (mode !== 'match' || name === 'results' || name === 'lobby') return;
     if (!online.active) paused = open;                 // 온라인 경기는 멈추지 않는다
@@ -85,33 +98,56 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && mod
 
 // ── 온라인 ──
 let roomParam = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || null;
-const randomCode = () => Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[(Math.random() * 32) | 0]).join('');
+let onlineAttempt = 0, joining = false;
 const online = new Online({
   lobby: () => { if (ui.panel?.name === 'lobby') ui.openLobby(lobbyView()); },
   start: (players, opts) => { beginMatch(players, opts); return sim; },
-  closed: (msg) => { startAttract(); ui.say(`<small>${msg}</small>`, '', 2500); },
+  closed: (msg) => { onlineAttempt++; roomParam = null; ui.pendingInvite = null; history.replaceState(null, '', location.pathname); startAttract(); ui.openOnline(null, msg); },
   note: (html) => ui.note(html),
+  directory: () => ui.refreshDirectory(directoryView()),
+  invite: (m) => { ui.pendingInvite = m; ui.refreshDirectory(directoryView()); },
+  notice: (msg) => ui.onlineMessage(msg),
 });
+function directoryView() {
+  return { ...online.directory, me: online.net?.visitorId, name: online.net?.name || save.name, room: online.net?.room };
+}
 function lobbyView() {
-  return { room: online.net.room, link: online.link, isHost: online.isHost, fill: online.fill, canStart: online.canStart(),
+  return { room: online.net.room, title: online.net.title, link: online.link, directory: directoryView(), isHost: online.isHost, fill: online.fill, canStart: online.canStart(),
     players: online.roster().map((p) => ({ ...p, me: p.id === online.id, host: p.id === online.net.hostId })) };
 }
+async function joinRoom(room, title) {
+  if (joining || online.active || !online.connected) return false;
+  joining = true; ui.setOnlineBusy(true); ui.onlineMessage('방에 들어가는 중…');
+  const net = online.net;
+  try {
+    await online.join(room, loadoutOf(save), title);
+    if (online.net !== net) return false;
+    roomParam = net.room;
+    history.replaceState(null, '', '?room=' + roomParam);
+    ui.pendingInvite = null; ui.openLobby(lobbyView());
+    return true;
+  } catch (e) {
+    if (online.net === net && online.connected) ui.openHall(directoryView(), e.message);
+    return false;
+  } finally { joining = false; ui.setOnlineBusy(false); }
+}
 function leaveRoom() {
-  online.leave(); roomParam = null;
+  online.leaveRoom(); roomParam = null;
   history.replaceState(null, '', location.pathname);
   startAttract();
+  if (online.connected) ui.openHall(directoryView());
 }
 
 function openPause() { if (mode === 'match' && sim.phase !== 'results') ui.openPause(); }
 
 const shuffled = (xs) => xs.map(x => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
 
-function startAttract() {
+function startAttract(keepPanel = false) {
   const names = shuffled(CFG.botNames);
   sim = new Sim([0, 1, 2, 3].map(i => ({ id: 'b' + i, name: names[i], team: i % 2, kind: 'bot', loadout: botLoadout(3, i >> 1) })), { aiLevel: 3 });
   sim.phaseT = 1.2;
   me = null; mode = 'title'; paused = false; attractT = 0;
-  view.attach(sim); ui.showTitle();
+  view.attach(sim); ui.showTitle(keepPanel);
   document.body.classList.remove('aiming');
 }
 
@@ -260,7 +296,7 @@ function frame(now) {
     while (acc >= STEP && n++ < 24) { tick(); acc -= STEP; }
     if (acc > STEP) acc = 0;
   }
-  if (mode === 'title' && sim.phase === 'results' && (attractT += dt) > 4) startAttract();
+  if (mode === 'title' && sim.phase === 'results' && (attractT += dt) > 4) startAttract(true);
   const orbit = mode === 'title' || sim.phase === 'results';
   view.render(paused ? 0 : dt, paused ? 1 : acc / STEP, orbit ? me : watch, orbit ? 'orbit' : 'play');
   if (mode === 'match') { ui.frame(view, input); updateArrows(); }

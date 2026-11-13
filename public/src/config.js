@@ -6,7 +6,7 @@
 export const ONLINE_SERVER = null;
 
 export const CFG = {
-  online: { connectTimeoutMs: 90000, retryMs: 1500 },
+  online: { connectTimeoutMs: 90000, retryMs: 1500, inviteCooldownMs: 3000 },
 
   // ── 월드 ────────────────────────────────────────────────
   towerRadius: 64,        // 탑 반지름

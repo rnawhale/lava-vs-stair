@@ -15,13 +15,15 @@ npm start          # → http://localhost:8787
 ```
 
 - `바로 플레이`: AI와 2대2 한 경기(등반 한 번, 방해 한 번). Coins·물총·강화는 같은 브라우저에 저장된다.
-- `친구 초대 대전`: 방을 만들고 초대 링크(`?room=코드`)를 보내면 2~4명이 게스트로 들어온다. 빈 자리는 AI.
+- `친구와 대전`: 별명을 입력하면 접속한 사람과 방 목록이 실시간으로 보인다. 방 제목을 눌러 들어가거나, 제목을 정해 내 방을 만든다. 친구 이름 옆의 `초대`를 누르면 상대 화면에 `같이 하기` 버튼이 뜬다(방 밖에서 초대하면 방도 함께 만든다). 2~4명이 함께하고 빈 자리는 AI.
+  같은 별명은 겹치지 않게 안내하며, 게임 중인 방과 꽉 찬 방은 입장을 막는다. 방에서 나가면 친구 목록으로 돌아가고, 친구 만나기를 닫으면 접속 목록에서도 빠진다.
+  밖에 있는 친구에게 보내는 초대 링크(`?room=코드`)는 방 하단의 접힌 메뉴에 있다.
   서버 한 대에 모두 접속해야 하므로 인터넷 너머 친구와 하려면 이 서버를 공개 주소로 띄우거나 터널을 쓴다.
 - `public/`은 정적 파일이라 아무 정적 호스팅에 올려도 AI 대전은 그대로 된다(온라인만 `server.js` 필요).
 
 ## 웹 배포
 
-- 플레이: https://rnawhale.github.io/lava-vs-stair/ — AI 대전과 친구 초대 대전 모두 지원한다. 개발 PC를 꺼도 접속할 수 있다. `main`의 `public/` 변경을 push하면 자동 배포된다.
+- 플레이: https://rnawhale.github.io/lava-vs-stair/ — AI 대전과 친구 대전 모두 지원한다. 개발 PC를 꺼도 접속할 수 있다. `main`의 `public/` 변경을 push하면 자동 배포된다.
 - 대전 서버: https://lava-vs-stair.onrender.com — `render.yaml`로 정적 파일과 WebSocket 서버를 함께 올린다. 이 주소에서도 바로 플레이할 수 있다. `/health`가 `{"online":true}`를 반환하면 온라인 서버가 준비된 것이다.
 - GitHub Pages는 저장소 Actions 변수 `LVS_ONLINE_URL`의 Render HTTPS 주소로 대전 서버에 연결한다. 이 값은 배포본의 `public/src/config.js`에만 적용된다. 서버를 옮기면 변수를 바꾸고 `Deploy game to GitHub Pages`를 실행한다. 서버 주소가 빠진 배포본은 준비 중이라는 안내를 표시한다.
 - [Render 무료 서버](https://render.com/docs/free)는 15분 동안 사용하지 않으면 쉬고, 다음 접속 때 다시 켜지는 데 약 1분 걸릴 수 있다. 친구 대전 입장 시 서버가 준비될 때까지 기다린다. 개발 PC의 전원과는 무관하다. 서버를 다시 만들 때는 [Render 배포](https://render.com/deploy?repo=https://github.com/rnawhale/lava-vs-stair)를 사용한다.
@@ -53,7 +55,7 @@ npm start          # → http://localhost:8787
 | `public/src/course.js` `physics.js` `sim.js` `ai.js` | 렌더러 없는 순수 로직: 코스/계단 주기, 캐릭터 물리, 경기·물총·점수 규칙, AI |
 | `public/src/view/` | three.js 화면: 탑·용암·계단·사격 통로, 캐릭터·물총 모델, 이펙트, 카메라 |
 | `public/src/ui.js` `input.js` `audio.js` `save.js` | HUD·상점·결과·대기실, 키보드/마우스/터치, 효과음, localStorage 저장과 거래 |
-| `public/src/net.js` `online.js` · `server.js` | 온라인: 각자 자기 캐릭터만 계산해 알리고 방장이 진행·AI를 맡는다. 서버는 방 중계만 |
+| `public/src/net.js` `online.js` · `server.js` | 온라인: 서버가 친구·방 목록, 초대, 방 중계를 맡는다. 각자 자기 캐릭터만 계산해 알리고 방장이 진행·AI를 맡는다 |
 | `public/vendor/three/` | three.js r187(MIT) 사본. 빌드 단계 없음 |
 | `public/assets/` | 이미지와 효과음 28종. 없어도 절차 그래픽·합성음으로 동작 |
 | `tools/` | 플레이 검증·밸런스 도구 |
@@ -62,12 +64,12 @@ npm start          # → http://localhost:8787
 
 서버를 띄운 뒤 실행한다. 브라우저 검증은 설치된 Chrome을 Playwright로 열어 **실제 키보드·마우스·터치 이벤트**를 보낸다.
 
-| 명령 | 내용 | 최근 결과(2026-11-12) |
+| 명령 | 내용 | 최근 로컬 결과 |
 |---|---|---|
 | `npm run check` | 규칙 자체 점검(물총 수치·강화, 거래 중복 방지, 저장 복구, 계단 기회, 점수·보호 규칙) | 115개 통과 |
 | `npm run playtest` | 시작→세 단계 등반→추락·복귀→교대→물총 방해→보상→구매·강화·장착→새로고침 복구, 화면 크기 변경, 상점 열기/닫기, 재시작, 연속 클릭 | 37/37 |
 | `npm run test:touch` | 모바일 에뮬레이션: 스틱·점프(멀티 터치)·화면 터치 조준, 가로/세로 배치 | 12/12 |
-| `npm run test:online` | 브라우저 2개로 초대 링크 입장→경기→결과 일치→재경기→방장 이탈 승계 | 19/19 |
+| `npm run test:online` | 친구·방 목록, 방 제목으로 입장, 초대 수락·거절·만료, 링크 입장→경기→결과 일치→재경기→방장 이탈 승계 | 30/30 |
 | `npm run sim` | 봇끼리 고속 경기로 난이도·밸런스 표 출력 | 순한맛 2.9점 → 불지옥맛 5.9점 |
 
 **확인하지 못한 것**
