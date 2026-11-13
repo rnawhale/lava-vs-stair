@@ -2,7 +2,12 @@
 // 길이 단위는 기존 Roblox 빌드의 stud를 그대로 쓴다(캐릭터 키 약 5, 걷기 16/s).
 // 그래서 사거리 60/45/60, 밀치기 15/8/24 같은 기준값이 환산 없이 1:1로 적용된다.
 
+// null: 같은 주소의 서버(로컬·Render). GitHub Pages 배포 때 외부 서버 주소로 채운다.
+export const ONLINE_SERVER = null;
+
 export const CFG = {
+  online: { connectTimeoutMs: 90000, retryMs: 1500 },
+
   // ── 월드 ────────────────────────────────────────────────
   towerRadius: 64,        // 탑 반지름
   stepRadial: 9.5,        // 계단이 벽 밖으로 나온 폭

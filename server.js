@@ -18,6 +18,10 @@ const MIME = {
 export const server = http.createServer(async (req, res) => {
   try {
     let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (path === '/health') {
+      res.writeHead(wsLib ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end(JSON.stringify({ online: !!wsLib }));
+      return;
+    }
     if (path.endsWith('/')) path += 'index.html';
     const file = normalize(join(ROOT, path));
     if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }   // 경로 탈출 차단

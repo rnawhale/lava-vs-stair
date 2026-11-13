@@ -22,7 +22,8 @@ npm start          # → http://localhost:8787
 ## 웹 배포
 
 - AI 대전: https://rnawhale.github.io/lava-vs-stair/ — GitHub Pages에서 실행하므로 개발 PC를 꺼도 접속할 수 있다. `main`의 `public/` 변경을 push하면 자동 배포된다.
-- 친구 초대 대전: [Render 배포](https://render.com/deploy?repo=https://github.com/rnawhale/lava-vs-stair). `render.yaml`로 정적 파일과 WebSocket 서버를 함께 올린다. Render 계정 연결과 첫 배포가 필요하며, 배포 후에는 Render 주소에서 플레이한다.
+- 친구 초대 대전: [Render 배포](https://render.com/deploy?repo=https://github.com/rnawhale/lava-vs-stair). `render.yaml`로 정적 파일과 WebSocket 서버를 함께 올린다. Render 계정 연결과 첫 배포가 필요하며, 배포 후에는 Render 주소에서도 플레이할 수 있다. `/health`가 `{"online":true}`를 반환하면 온라인 서버가 준비된 것이다.
+- 기존 GitHub Pages 주소에서도 친구 대전을 하려면 저장소 Actions 변수 `LVS_ONLINE_URL`에 실제 Render HTTPS 주소를 넣고 `Deploy game to GitHub Pages`를 실행한다. 이 값은 배포본의 `public/src/config.js`에만 적용된다. 서버가 연결되지 않은 배포본은 준비 중이라는 안내를 표시한다.
 - Render 무료 서버는 15분 동안 사용하지 않으면 쉬고, 다음 접속 때 다시 켜지는 데 약 1분 걸릴 수 있다. 개발 PC의 전원과는 무관하다.
 
 ## 조작

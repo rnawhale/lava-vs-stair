@@ -26,6 +26,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Connect online server
+        env:
+          LVS_ONLINE_URL: ${{ vars.LVS_ONLINE_URL }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'public/src/config.js';
+          const url = process.env.LVS_ONLINE_URL || '';
+          if (url && new URL(url).protocol !== 'https:') throw new Error('LVS_ONLINE_URL must be an HTTPS server URL');
+          writeFileSync(path, readFileSync(path, 'utf8').replace('export const ONLINE_SERVER = null;', `export const ONLINE_SERVER = ${JSON.stringify(url)};`));
+          JS
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
