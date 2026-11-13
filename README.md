@@ -25,7 +25,7 @@ npm start          # → http://localhost:8787
 ## 웹 배포
 
 - 플레이: https://rnawhale.github.io/lava-vs-stair/ — AI 대전과 친구 대전 모두 지원한다. 개발 PC를 꺼도 접속할 수 있다. `main`의 `public/` 변경을 push하면 자동 배포된다.
-- 대전 서버: https://lava-vs-stair.onrender.com — `render.yaml`로 정적 파일과 WebSocket 서버를 함께 올린다. 이 주소에서도 바로 플레이할 수 있다. `/health`가 `{"online":true}`를 반환하면 온라인 서버가 준비된 것이다.
+- 대전 서버: https://lava-vs-stair.onrender.com — `render.yaml`로 정적 파일과 WebSocket 서버를 함께 올린다. 이 주소에서도 바로 플레이할 수 있다. `/health`가 `{"online":true}`를 반환하면 온라인 서버가 준비된 것이다. 이 서버는 push만으로는 갱신되지 않는다. Render 대시보드에서 `Manual Deploy → Deploy latest commit`으로 올리고, `/src/config.js`에 새 값이 보이는지로 반영을 확인한다.
 - GitHub Pages는 저장소 Actions 변수 `LVS_ONLINE_URL`의 Render HTTPS 주소로 대전 서버에 연결한다. 이 값은 배포본의 `public/src/config.js`에만 적용된다. 서버를 옮기면 변수를 바꾸고 `Deploy game to GitHub Pages`를 실행한다. 서버 주소가 빠진 배포본은 준비 중이라는 안내를 표시한다.
 - [Render 무료 서버](https://render.com/docs/free)는 15분 동안 사용하지 않으면 쉬고, 다음 접속 때 다시 켜지는 데 약 1분 걸릴 수 있다. 친구 대전 입장 시 서버가 준비될 때까지 기다린다. 개발 PC의 전원과는 무관하다. 서버를 다시 만들 때는 [Render 배포](https://render.com/deploy?repo=https://github.com/rnawhale/lava-vs-stair)를 사용한다.
 
@@ -71,10 +71,10 @@ npm start          # → http://localhost:8787
 | `npm run check` | 규칙 자체 점검(물총 수치·강화, 거래 중복 방지, 저장 복구, 계단 기회, 점수·보호 규칙, 3대3 자리, 두 바퀴째 추락, 팀 고르기) | 493개 통과 |
 | `npm run playtest` | 시작→AI 난이도 고르기→다섯 단계 등반→추락·복귀→교대→물총 방해→보상→구매·강화·장착→새로고침 복구, 화면 크기 변경, 상점 열기/닫기, 재시작, 연속 클릭 | 39/39 |
 | `npm run test:touch` | 모바일 에뮬레이션: 스틱·점프(멀티 터치)·화면 터치 조준, 가로/세로 배치 | 12/12 |
-| `npm run test:online` | 친구·방 목록, 방 제목으로 입장, 초대 수락·거절·만료, 링크 입장→팀 고르기·방장의 AI 난이도→3대3 경기→결과 일치→재경기→방장 이탈 승계 | 로컬 37/37 |
+| `npm run test:online` | 친구·방 목록, 방 제목으로 입장, 초대 수락·거절·만료, 링크 입장→팀 고르기·방장의 AI 난이도→3대3 경기→결과 일치→재경기→방장 이탈 승계 | 공개 주소 37/37 |
 | `npm run sim` | 봇끼리 고속 경기로 난이도·밸런스 표 출력 | 순한맛 4.8점 → 불지옥맛 13.3점(15점 만점) |
 
-공개 주소 검사는 `LVS_URL=https://rnawhale.github.io/lava-vs-stair npm run test:online`으로 실행한다. 3대3·다섯 단계 판은 로컬 서버에서만 확인했으므로 배포한 뒤 공개 주소에서 다시 돌려야 한다(2대2·세 단계 판은 2026-11-13에 공개 주소에서 32/32 통과).
+공개 주소 검사는 `LVS_URL=https://rnawhale.github.io/lava-vs-stair npm run test:online`으로 실행한다. 2026-11-13 3대3·다섯 단계 판을 배포한 뒤 공개 주소에서 방 목록·게임 안 초대·팀 고르기·방장의 AI 난이도·경기 전체·재경기·방장 승계까지 37/37 통과했다.
 
 **확인하지 못한 것**
 
